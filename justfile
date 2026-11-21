@@ -96,9 +96,13 @@ gate-expensive: gate test-integration test-e2e
 # Everything including external
 gate-external: gate-expensive test-external
 
-# Start backend dev server
+# Start backend dev server on fakes: memory storage, dev auth, demo data
 dev-be:
-    uv run uvicorn slate.app:app --reload
+    SLATE_STORAGE=memory SLATE_AUTH=dev SLATE_SEED=demo LOG_FORMAT=console uv run uvicorn slate.app:app --reload --port 8000
+
+# Start backend dev server on a local SQLite file (./data.db), seeded once
+dev-be-sqlite:
+    SLATE_STORAGE=sql SLATE_AUTH=dev SLATE_SEED=demo LOG_FORMAT=console uv run uvicorn slate.app:app --reload --port 8000
 
 # Start frontend dev server
 dev-fe:
