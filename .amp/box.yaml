@@ -1,0 +1,10 @@
+build: bash scripts/box-build.sh
+source: false
+artifacts: [.box]
+services:
+  web:
+    command: sh .box/run.sh
+    env:
+      SLATE_STORAGE: sql
+      SLATE_AUTH: amp
+      LOG_LEVEL: INFO
