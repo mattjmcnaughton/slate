@@ -1,0 +1,4 @@
+# No external services required for local development.
+# Add services here as needed.
+services: {}
+
