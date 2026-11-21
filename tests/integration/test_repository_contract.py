@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from slate.clock import FixedClock
-from slate.db import create_all, make_engine, make_sessionmaker
+from slate.db import make_engine, make_sessionmaker, run_migrations
 from slate.domain import Area, Comment, Label, Project, Task, TaskFilter, TaskStatus
 from slate.models import Base
 from slate.repositories.memory import MemoryUnitOfWorkFactory
@@ -39,7 +39,9 @@ async def uow_factory(request, tmp_path):
     if request.param == "postgres":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
-    await create_all(engine)
+            await conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
+    # Build the schema the way production does, so model/migration drift fails here.
+    await run_migrations(engine)
     yield SqlUnitOfWorkFactory(make_sessionmaker(engine), clock)
     await engine.dispose()
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -29,6 +31,25 @@ def make_engine(url: str) -> AsyncEngine:
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
+def _upgrade(connection) -> None:  # noqa: ANN001
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
+    cfg.attributes["connection"] = connection
+    command.upgrade(cfg, "head")
+
+
+async def run_migrations(engine: AsyncEngine) -> None:
+    """Upgrade the database to the latest migration (runs at app startup)."""
+    async with engine.begin() as conn:
+        await conn.run_sync(_upgrade)
 
 
 async def create_all(engine: AsyncEngine) -> None:
