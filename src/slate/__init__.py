@@ -1,5 +1,3 @@
-"""Personal task manager replacing Linear and Todoist"""
+"""Slate: a personal task manager replacing Linear and Todoist."""
 
-from importlib.metadata import version
-
-__version__ = version("slate")
+__version__ = "0.1.0"
