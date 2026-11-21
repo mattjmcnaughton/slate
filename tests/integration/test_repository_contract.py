@@ -51,17 +51,34 @@ async def _seed(uow):
     errand = await uow.labels.add(Label(name="errand"))
     t = {}
     t["a"] = await uow.tasks.add(
-        Task(title="Buy tiles", project_id=kitchen.id, due_date=date(2026, 11, 25), priority=2,
-             label_ids=[errand.id])
+        Task(
+            title="Buy tiles",
+            project_id=kitchen.id,
+            due_date=date(2026, 11, 25),
+            priority=2,
+            label_ids=[errand.id],
+        )
     )
-    t["b"] = await uow.tasks.add(Task(title="Water plants", area_id=home.id, due_date=date(2026, 11, 21),
-                                      recurrence=Recurrence("FREQ=DAILY", RecurrenceMode.FIXED,
-                                                            date(2026, 11, 1), text="every day")))
+    t["b"] = await uow.tasks.add(
+        Task(
+            title="Water plants",
+            area_id=home.id,
+            due_date=date(2026, 11, 21),
+            recurrence=Recurrence(
+                "FREQ=DAILY", RecurrenceMode.FIXED, date(2026, 11, 1), text="every day"
+            ),
+        )
+    )
     t["c"] = await uow.tasks.add(Task(title="Inbox idea"))
-    t["d"] = await uow.tasks.add(Task(title="Write report", area_id=work.id, priority=1,
-                                      due_date=date(2026, 11, 22)))
-    t["e"] = await uow.tasks.add(Task(title="Old thing", status=TaskStatus.DONE, project_id=kitchen.id))
-    t["f"] = await uow.tasks.add(Task(title="Measure wall", parent_id=t["a"].id, project_id=kitchen.id))
+    t["d"] = await uow.tasks.add(
+        Task(title="Write report", area_id=work.id, priority=1, due_date=date(2026, 11, 22))
+    )
+    t["e"] = await uow.tasks.add(
+        Task(title="Old thing", status=TaskStatus.DONE, project_id=kitchen.id)
+    )
+    t["f"] = await uow.tasks.add(
+        Task(title="Measure wall", parent_id=t["a"].id, project_id=kitchen.id)
+    )
     await uow.commit()
     return home, work, kitchen, errand, t
 
@@ -82,27 +99,43 @@ async def test_round_trip_and_filters(uow_factory):
 
         # Default sort: due ascending, undated last, ties by priority then id.
         assert titles(await uow.tasks.list(TaskFilter())) == [
-            "Water plants", "Write report", "Buy tiles", "Inbox idea", "Measure wall",
+            "Water plants",
+            "Write report",
+            "Buy tiles",
+            "Inbox idea",
+            "Measure wall",
         ]
         assert titles(await uow.tasks.list(TaskFilter(sort="priority"))) == [
-            "Write report", "Buy tiles", "Water plants", "Inbox idea", "Measure wall",
+            "Write report",
+            "Buy tiles",
+            "Water plants",
+            "Inbox idea",
+            "Measure wall",
         ]
         assert titles(await uow.tasks.list(TaskFilter(sort="due", order="desc")))[:3] == [
-            "Buy tiles", "Write report", "Water plants",
+            "Buy tiles",
+            "Write report",
+            "Water plants",
         ]
         # Area matches direct tasks and tasks of its projects.
         assert set(titles(await uow.tasks.list(TaskFilter(area_id=home.id)))) == {
-            "Buy tiles", "Water plants", "Measure wall",
+            "Buy tiles",
+            "Water plants",
+            "Measure wall",
         }
         assert titles(await uow.tasks.list(TaskFilter(inbox=True))) == ["Inbox idea"]
         assert titles(await uow.tasks.list(TaskFilter(label_id=errand.id))) == ["Buy tiles"]
         assert titles(await uow.tasks.list(TaskFilter(parent_id=t["a"].id))) == ["Measure wall"]
         assert "Measure wall" not in titles(await uow.tasks.list(TaskFilter(parent_id=0)))
-        assert titles(await uow.tasks.list(TaskFilter(statuses=(TaskStatus.DONE,)))) == ["Old thing"]
+        assert titles(await uow.tasks.list(TaskFilter(statuses=(TaskStatus.DONE,)))) == [
+            "Old thing"
+        ]
         assert len(await uow.tasks.list(TaskFilter(include_closed=True))) == 6
         assert titles(await uow.tasks.list(TaskFilter(recurring=True))) == ["Water plants"]
         assert titles(
-            await uow.tasks.list(TaskFilter(due_after=date(2026, 11, 22), due_before=date(2026, 11, 25)))
+            await uow.tasks.list(
+                TaskFilter(due_after=date(2026, 11, 22), due_before=date(2026, 11, 25))
+            )
         ) == ["Write report", "Buy tiles"]
         assert titles(await uow.tasks.list(TaskFilter(q="TILES"))) == ["Buy tiles"]
 
@@ -110,7 +143,9 @@ async def test_round_trip_and_filters(uow_factory):
 async def test_source_uniqueness_and_preserved_timestamps(uow_factory):
     old = datetime(2024, 3, 1, 12, tzinfo=UTC)
     async with uow_factory() as uow:
-        a = await uow.tasks.add(Task(title="Imported", source="todoist", source_id="99", created_at=old))
+        a = await uow.tasks.add(
+            Task(title="Imported", source="todoist", source_id="99", created_at=old)
+        )
         await uow.commit()
     async with uow_factory() as uow:
         got = await uow.tasks.get_by_source("todoist", "99")

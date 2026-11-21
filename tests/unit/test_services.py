@@ -113,7 +113,9 @@ async def test_import_is_idempotent_and_keeps_history(svc):
         source="todoist",
         projects=[ImportProject(source_id="p1", name="Home")],
         tasks=[
-            ImportTask(source_id="t2", title="Child", parent_source_id="t1", project_source_id="p1"),
+            ImportTask(
+                source_id="t2", title="Child", parent_source_id="t1", project_source_id="p1"
+            ),
             ImportTask(
                 source_id="t1",
                 title="Parent",

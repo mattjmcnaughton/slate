@@ -8,7 +8,9 @@ from sqlalchemy import engine_from_config, pool
 from slate.config import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", "").replace("+aiosqlite", ""))
+config.set_main_option(
+    "sqlalchemy.url", settings.database_url.replace("+asyncpg", "").replace("+aiosqlite", "")
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

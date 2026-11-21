@@ -121,8 +121,13 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
             saved = await uow.areas.update(existing)
         else:
             saved = await uow.areas.add(
-                Area(name=a.name, color=a.color or "#6b7280", position=a.position,
-                     source=src, source_id=a.source_id)
+                Area(
+                    name=a.name,
+                    color=a.color or "#6b7280",
+                    position=a.position,
+                    source=src,
+                    source_id=a.source_id,
+                )
             )
         ids["area"][a.source_id] = saved.id  # type: ignore[assignment]
         report.bump("areas", existing is None)
@@ -143,8 +148,13 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
     for p in batch.projects:
         area_id = await resolve("area", uow.areas, p.area_source_id)
         existing = await uow.projects.get_by_source(src, p.source_id)
-        fields = dict(name=p.name, area_id=area_id, status=p.status,
-                      description=p.description, target_date=p.target_date)
+        fields = dict(
+            name=p.name,
+            area_id=area_id,
+            status=p.status,
+            description=p.description,
+            target_date=p.target_date,
+        )
         if existing:
             for k, v in fields.items():
                 setattr(existing, k, v)
@@ -183,7 +193,9 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
             project_id=await resolve("project", uow.projects, it.project_source_id),
             area_id=await resolve("area", uow.areas, it.area_source_id),
             parent_id=parent_id,
-            label_ids=[i for s in it.label_source_ids if (i := await resolve("label", uow.labels, s))],
+            label_ids=[
+                i for s in it.label_source_ids if (i := await resolve("label", uow.labels, s))
+            ],
             due_date=due_date,
             due_time=due_time,
             recurrence=recurrence,
@@ -204,8 +216,12 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
             if task.status in (TaskStatus.DONE, TaskStatus.CANCELED) and task.completed_at is None:
                 task.completed_at = task.created_at
             saved = await uow.tasks.add(task)
-            await svc._log(saved.id, "imported", {"source": src, "source_id": it.source_id},  # noqa: SLF001
-                           at=saved.created_at)
+            await svc._log(
+                saved.id,
+                "imported",
+                {"source": src, "source_id": it.source_id},  # noqa: SLF001
+                at=saved.created_at,
+            )
         ids["task"][it.source_id] = saved.id  # type: ignore[assignment]
         report.bump("tasks", existing is None)
 
@@ -216,8 +232,13 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
                 await uow.comments.update(ec)
             else:
                 await uow.comments.add(
-                    Comment(task_id=saved.id, body=c.body, source=src, source_id=c.source_id,  # type: ignore[arg-type]
-                            created_at=c.created_at)
+                    Comment(
+                        task_id=saved.id,
+                        body=c.body,
+                        source=src,
+                        source_id=c.source_id,  # type: ignore[arg-type]
+                        created_at=c.created_at,
+                    )
                 )
             report.bump("comments", ec is None)
     return report

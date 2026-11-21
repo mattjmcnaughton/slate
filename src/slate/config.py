@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-
     database_url: str = "sqlite+aiosqlite:///./data.db"
-
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

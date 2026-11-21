@@ -101,9 +101,7 @@ class TaskRow(SourceMixin, Base):
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16))
     priority: Mapped[int] = mapped_column(Integer, default=0)
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL")
-    )
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"))
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id", ondelete="SET NULL"))
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
     due_date: Mapped[date | None] = mapped_column(Date)

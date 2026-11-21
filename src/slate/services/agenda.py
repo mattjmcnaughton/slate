@@ -43,7 +43,10 @@ async def build_agenda(uow: UnitOfWork, today: date, start: date, end: date) -> 
     ghosts because their later dates depend on when you finish.
     """
     open_due = await uow.tasks.list(TaskFilter(has_due=True, due_before=end, sort="due"))
-    days = {start + timedelta(days=i): AgendaDay(start + timedelta(days=i)) for i in range((end - start).days + 1)}
+    days = {
+        start + timedelta(days=i): AgendaDay(start + timedelta(days=i))
+        for i in range((end - start).days + 1)
+    }
     overdue: list[Task] = []
     for t in open_due:
         assert t.due_date is not None

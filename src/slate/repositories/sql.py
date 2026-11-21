@@ -195,14 +195,18 @@ class SqlAreaRepository(_SqlRepo):
     name = "areas"
 
     async def list(self) -> list[Area]:
-        rows = (await self.s.execute(select(AreaRow).order_by(AreaRow.position, AreaRow.id))).scalars()
+        rows = (
+            await self.s.execute(select(AreaRow).order_by(AreaRow.position, AreaRow.id))
+        ).scalars()
         return [_to_entity(self.name, r) for r in rows]
 
     async def delete(self, id: int) -> None:
         # Portable SET NULL: SQLite enforces foreign keys only when asked.
         from sqlalchemy import update
 
-        await self.s.execute(update(ProjectRow).where(ProjectRow.area_id == id).values(area_id=None))
+        await self.s.execute(
+            update(ProjectRow).where(ProjectRow.area_id == id).values(area_id=None)
+        )
         await self.s.execute(update(TaskRow).where(TaskRow.area_id == id).values(area_id=None))
         await super().delete(id)
 
@@ -219,7 +223,9 @@ class SqlProjectRepository(_SqlRepo):
     async def delete(self, id: int) -> None:
         from sqlalchemy import update
 
-        await self.s.execute(update(TaskRow).where(TaskRow.project_id == id).values(project_id=None))
+        await self.s.execute(
+            update(TaskRow).where(TaskRow.project_id == id).values(project_id=None)
+        )
         await super().delete(id)
 
 
@@ -227,7 +233,9 @@ class SqlLabelRepository(_SqlRepo):
     name = "labels"
 
     async def list(self) -> list[Label]:
-        rows = (await self.s.execute(select(LabelRow).order_by(func.lower(LabelRow.name)))).scalars()
+        rows = (
+            await self.s.execute(select(LabelRow).order_by(func.lower(LabelRow.name)))
+        ).scalars()
         return [_to_entity(self.name, r) for r in rows]
 
     async def delete(self, id: int) -> None:
@@ -317,7 +325,9 @@ class SqlTaskRepository:
         row = await self.s.get(TaskRow, id)
         if row is None:
             raise NotFoundError(f"tasks {id}")
-        child_ids = (await self.s.execute(select(TaskRow.id).where(TaskRow.parent_id == id))).scalars()
+        child_ids = (
+            await self.s.execute(select(TaskRow.id).where(TaskRow.parent_id == id))
+        ).scalars()
         ids = [id, *child_ids]
         for model in (TaskLabelRow, CommentRow, ActivityRow):
             await self.s.execute(delete(model).where(model.task_id.in_(ids)))
@@ -346,13 +356,17 @@ class SqlTaskRepository:
             q = q.where(TaskRow.project_id.is_(None), TaskRow.area_id.is_(None))
         if f.parent_id is not None:
             q = q.where(
-                TaskRow.parent_id.is_(None) if f.parent_id == 0 else TaskRow.parent_id == f.parent_id
+                TaskRow.parent_id.is_(None)
+                if f.parent_id == 0
+                else TaskRow.parent_id == f.parent_id
             )
         if f.priorities:
             q = q.where(TaskRow.priority.in_(f.priorities))
         if f.label_id is not None:
             q = q.where(
-                TaskRow.id.in_(select(TaskLabelRow.task_id).where(TaskLabelRow.label_id == f.label_id))
+                TaskRow.id.in_(
+                    select(TaskLabelRow.task_id).where(TaskLabelRow.label_id == f.label_id)
+                )
             )
         if f.has_due is not None:
             q = q.where(TaskRow.due_date.is_not(None) if f.has_due else TaskRow.due_date.is_(None))
@@ -398,7 +412,9 @@ class SqlActivityRepository:
 
     @staticmethod
     def _entity(r: ActivityRow) -> Activity:
-        return Activity(id=r.id, task_id=r.task_id, kind=r.kind, data=r.data or {}, created_at=r.created_at)
+        return Activity(
+            id=r.id, task_id=r.task_id, kind=r.kind, data=r.data or {}, created_at=r.created_at
+        )
 
     async def add(self, activity: Activity) -> Activity:
         row = ActivityRow(
