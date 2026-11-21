@@ -1,16 +1,37 @@
-"""Database engine and session configuration."""
+"""Database engine construction. No module-level engine: the container owns it."""
 
-from collections.abc import AsyncGenerator
+from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from slate.config import settings
-
-engine = create_async_engine(settings.database_url)
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+from slate.models import Base
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield a database session (use as a FastAPI dependency)."""
-    async with async_session() as session:
-        yield session
+def make_engine(url: str) -> AsyncEngine:
+    engine = create_async_engine(url)
+    if engine.dialect.name == "sqlite":
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def _pragmas(dbapi_conn, _record) -> None:  # noqa: ANN001
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.close()
+
+    return engine
+
+
+def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+async def create_all(engine: AsyncEngine) -> None:
+    """Create tables directly (tests). Production uses Alembic migrations."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
