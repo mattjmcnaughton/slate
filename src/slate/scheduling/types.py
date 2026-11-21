@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+# Imported as a module, and at runtime: `Due` and `Recurrence` have fields
+# named `date` and `time`, which would shadow the types in their own
+# annotations (pydantic and type checkers then read `time | None` as None).
+import datetime as dt  # noqa: TC003
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
 from enum import StrEnum
 
 
@@ -31,8 +34,8 @@ class Recurrence:
 
     rrule: str
     mode: RecurrenceMode
-    dtstart: date
-    time: time | None = None
+    dtstart: dt.date
+    time: dt.time | None = None
     text: str = ""
 
 
@@ -40,8 +43,8 @@ class Recurrence:
 class Due:
     """A due date with an optional local time. No time zone: dates are local."""
 
-    date: date
-    time: time | None = None
+    date: dt.date
+    time: dt.time | None = None
 
 
 class TokenKind(StrEnum):
@@ -84,7 +87,7 @@ class ParseContext:
     parser reads ``now.date()`` as "today".
     """
 
-    now: datetime
+    now: dt.datetime
     areas: tuple[EntityRef, ...] = ()
     projects: tuple[EntityRef, ...] = ()
     labels: tuple[EntityRef, ...] = ()
