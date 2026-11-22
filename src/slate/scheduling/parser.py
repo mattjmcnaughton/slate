@@ -280,9 +280,7 @@ def _time_only(phrase: Phrase) -> bool:
 
 
 def _has_time(phrase: Phrase) -> bool:
-    return phrase.at is not None or (
-        phrase.rule is not None and phrase.rule.at is not None
-    )
+    return phrase.at is not None or (phrase.rule is not None and phrase.rule.at is not None)
 
 
 def _find_schedule(

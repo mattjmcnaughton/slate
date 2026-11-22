@@ -372,9 +372,7 @@ class Grammar:
         else:
             nxt = self._tok(i + 1)
             if len(tok.text) > 2 or (
-                nxt is not None
-                and nxt.kind == "word"
-                and (nxt.glued or nxt.text in ("am", "pm"))
+                nxt is not None and nxt.kind == "word" and (nxt.glued or nxt.text in ("am", "pm"))
             ):
                 return None
             value = int(tok.text)
@@ -586,9 +584,7 @@ class Grammar:
 
     # Times
 
-    def _time(
-        self, i: int, *, bare_hour: bool = False, parts: bool = False
-    ) -> _Time | None:
+    def _time(self, i: int, *, bare_hour: bool = False, parts: bool = False) -> _Time | None:
         """A time at ``i``. ``bare_hour`` allows "at 7" (24-hour: 07:00);
         ``parts`` allows "morning", "evening", and so on."""
         lead = self._is(i, "at")
@@ -643,9 +639,7 @@ class Grammar:
         if found is not None:
             at, end = found.at, found.end
             weak = found.weak and lead is None
-            after = self._time(
-                end + 1 if self._sym(end, ",") else end, bare_hour=True, parts=True
-            )
+            after = self._time(end + 1 if self._sym(end, ",") else end, bare_hour=True, parts=True)
             if after is not None:
                 at, end, weak = after.at, after.end, weak and after.weak
             return Phrase(i, end, day=found.day, at=at, weak=weak)

@@ -136,9 +136,7 @@ def _explicit(rec: Recurrence) -> dict[str, str]:
         and parts.get("BYMONTH", "2") == "2"
     ):
         days, setpos = year_day_fields(2, 29)
-        parts.update(
-            BYMONTH="2", BYMONTHDAY=",".join(map(str, days)), BYSETPOS=str(setpos)
-        )
+        parts.update(BYMONTH="2", BYMONTHDAY=",".join(map(str, days)), BYSETPOS=str(setpos))
     return parts
 
 

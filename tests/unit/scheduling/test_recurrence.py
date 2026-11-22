@@ -215,9 +215,7 @@ LATE_AND_EARLY = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("rrule", "dtstart", "current", "today", "expected"), LATE_AND_EARLY
-)
+@pytest.mark.parametrize(("rrule", "dtstart", "current", "today", "expected"), LATE_AND_EARLY)
 def test_fixed_next_due_is_after_both_the_old_due_date_and_today(
     rrule: str, dtstart: str, current: str, today: str, expected: str | None
 ) -> None:
@@ -271,9 +269,7 @@ def test_occurrences_are_inclusive_and_bounded() -> None:
     assert occurrences(rec, start=d("2026-11-21"), end=d("2026-12-06")) == mon_thu
     assert occurrences(rec, start=d("2026-11-23"), end=d("2026-12-03")) == mon_thu
     assert occurrences(rec, start=d("2026-11-24"), end=d("2026-11-25")) == []
-    assert occurrences(rec, start=d("2026-11-26"), end=d("2026-11-26")) == [
-        d("2026-11-26")
-    ]
+    assert occurrences(rec, start=d("2026-11-26"), end=d("2026-11-26")) == [d("2026-11-26")]
     # Nothing before dtstart, and nothing for an inverted range.
     assert occurrences(rec, start=d("2026-11-01"), end=d("2026-11-22")) == []
     assert occurrences(rec, start=d("2026-12-06"), end=d("2026-11-21")) == []
@@ -349,8 +345,7 @@ OLD_SERIES = [
         "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH",
         date(2015, 1, 8),  # a Thursday
         lambda day, start: (
-            day.weekday() in (1, 3)
-            and (_week_start(day) - _week_start(start)).days % 14 == 0
+            day.weekday() in (1, 3) and (_week_start(day) - _week_start(start)).days % 14 == 0
         ),
     ),
     (
@@ -368,9 +363,7 @@ OLD_SERIES = [
     (
         "FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15",
         date(2015, 2, 15),
-        lambda day, start: (
-            day.day == 15 and (_month_index(day) - _month_index(start)) % 3 == 0
-        ),
+        lambda day, start: day.day == 15 and (_month_index(day) - _month_index(start)) % 3 == 0,
     ),
     (
         "FREQ=MONTHLY;INTERVAL=2;BYDAY=-1FR",
@@ -389,9 +382,7 @@ OLD_SERIES = [
     (
         "FREQ=YEARLY;INTERVAL=2",
         date(2016, 2, 29),
-        lambda day, start: (
-            day.month == 2 and _last_day(day) and (day.year - start.year) % 2 == 0
-        ),
+        lambda day, start: day.month == 2 and _last_day(day) and (day.year - start.year) % 2 == 0,
     ),
     (
         # The day (29) comes from dtstart, the month from the rule.
@@ -402,9 +393,7 @@ OLD_SERIES = [
     (
         "FREQ=YEARLY;INTERVAL=3;BYMONTH=12;BYMONTHDAY=31",
         date(2015, 12, 31),
-        lambda day, start: (
-            (day.month, day.day) == (12, 31) and (day.year - start.year) % 3 == 0
-        ),
+        lambda day, start: (day.month, day.day) == (12, 31) and (day.year - start.year) % 3 == 0,
     ),
 ]
 

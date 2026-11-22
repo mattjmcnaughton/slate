@@ -1440,9 +1440,7 @@ RECURRENCES = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("now", "phrase", "rrule", "mode", "dtstart", "due", "at"), RECURRENCES
-)
+@pytest.mark.parametrize(("now", "phrase", "rrule", "mode", "dtstart", "due", "at"), RECURRENCES)
 def test_recurrence(
     now: str,
     phrase: str,
@@ -1466,9 +1464,7 @@ def test_recurrence(
     assert (result.due.date, result.due.time) == (d(due), t(at))
 
 
-@pytest.mark.parametrize(
-    ("now", "phrase", "rrule", "mode", "dtstart", "due", "at"), RECURRENCES
-)
+@pytest.mark.parametrize(("now", "phrase", "rrule", "mode", "dtstart", "due", "at"), RECURRENCES)
 def test_normalized_text_parses_back_to_the_same_rule(
     now: str,
     phrase: str,

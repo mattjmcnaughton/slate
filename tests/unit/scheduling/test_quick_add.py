@@ -410,9 +410,7 @@ def test_expected_offsets_point_at_the_token_text(case: Case) -> None:
 
 
 def test_recurrence_carries_time_start_and_text() -> None:
-    result = parse_quick_add(
-        "Water plants every 3 days starting tomorrow at 9am #home", ctx("sat")
-    )
+    result = parse_quick_add("Water plants every 3 days starting tomorrow at 9am #home", ctx("sat"))
     rec = result.recurrence
     assert rec is not None
     assert (rec.dtstart, rec.time, rec.text) == (
