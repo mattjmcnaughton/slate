@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     # memory: the in-process fake (data is lost on restart). sql: DATABASE_URL.
     slate_storage: Literal["memory", "sql"] = "sql"
     # dev: always signed in as a fake user. amp: Sign in with Amp.
-    slate_auth: Literal["dev", "amp"] = "amp"
+    # gate: trust Amp's private-deployment gate; every request is the owner.
+    slate_auth: Literal["dev", "amp", "gate"] = "amp"
     # demo: load sample data at startup when the database is empty.
     slate_seed: Literal["none", "demo"] = "none"
     # Freeze the clock for reproducible dev data, such as 2026-11-21T09:00:00-05:00.

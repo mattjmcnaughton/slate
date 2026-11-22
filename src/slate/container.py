@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 from itsdangerous import URLSafeTimedSerializer
 
 from slate.auth import (
+    DEV_USER,
+    OWNER_USER,
     AmpOAuthProvider,
     Authenticator,
     DevAuthenticator,
@@ -83,11 +85,12 @@ def build_container(settings: Settings) -> Container:
         startup.append(seed_if_empty)
 
     secure = not settings.redirect_uri.startswith("http://")
-    if settings.slate_auth == "dev":
+    if settings.slate_auth in ("dev", "gate"):
+        user = OWNER_USER if settings.slate_auth == "gate" else DEV_USER
         return Container(
             clock=clock,
             uow_factory=uow_factory,
-            authenticator=DevAuthenticator(settings.api_tokens),
+            authenticator=DevAuthenticator(settings.api_tokens, user),
             startup=startup,
             shutdown=shutdown,
             secure_cookies=False,

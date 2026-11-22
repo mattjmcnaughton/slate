@@ -48,6 +48,8 @@ class User:
 
 
 DEV_USER = User(id="user_dev", name="Dev User", email="dev@example.com", via="dev")
+# For a private Box deployment: Amp only lets the owner through.
+OWNER_USER = User(id="owner", name="Owner", via="gate")
 
 
 def _bearer(request: Request) -> str | None:
@@ -68,11 +70,14 @@ class Authenticator(Protocol):
 
 
 class DevAuthenticator:
-    def __init__(self, api_tokens: frozenset[str] = frozenset()) -> None:
+    """Every request is ``user``: local development, or behind Amp's private gate."""
+
+    def __init__(self, api_tokens: frozenset[str] = frozenset(), user: User = DEV_USER) -> None:
         self.api_tokens = api_tokens
+        self.user = user
 
     async def authenticate(self, request: Request) -> User | None:
-        return _token_user(request, self.api_tokens) or DEV_USER
+        return _token_user(request, self.api_tokens) or self.user
 
 
 class SessionAuthenticator:
