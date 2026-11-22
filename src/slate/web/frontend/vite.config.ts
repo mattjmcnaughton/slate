@@ -1,9 +1,13 @@
-import { defineConfig } from "vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import { defineConfig } from "vitest/config";
+
+// The backend refuses cookie-authenticated writes whose Origin does not match
+// the Host header, so the proxy keeps the browser's Host (no changeOrigin).
+const backend = { target: "http://localhost:8000", changeOrigin: false };
 
 export default defineConfig({
-  plugins: [TanStackRouterVite(), react()],
+  plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react()],
   resolve: {
     alias: {
       "@": "/src",
@@ -16,10 +20,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
+      "/api": backend,
+      "/auth": backend,
     },
   },
 });

@@ -1,3 +1,203 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Colors are RGB triplets so Tailwind can apply alpha (bg-accent/10). */
+:root {
+  /* Light: Daybook */
+  --bg: 244 246 241;
+  --panel: 255 255 255;
+  --raise: 255 255 255;
+  --hover: 238 241 234;
+  --line: 225 230 222;
+  --line2: 201 209 200;
+  --ink: 26 35 32;
+  --ink2: 85 97 91;
+  --ink3: 135 145 139;
+  --accent: 29 107 85;
+  --accent-soft: #e0eee7;
+  --red: 179 48 77;
+  --amber: 168 106 18;
+  --blue: 44 104 173;
+  --plum: 122 75 176;
+  --teal: 31 120 128;
+  --shadow: 0 1px 2px rgb(26 35 32 / 0.06), 0 12px 32px -8px rgb(26 35 32 / 0.18);
+  font-size: 14px;
+}
+
+.dark {
+  /* Dark: Ledger */
+  --bg: 20 22 27;
+  --panel: 24 27 33;
+  --raise: 31 35 43;
+  --hover: 35 40 50;
+  --line: 38 42 51;
+  --line2: 52 58 72;
+  --ink: 227 229 234;
+  --ink2: 160 166 180;
+  --ink3: 109 115 130;
+  --accent: 141 149 247;
+  --accent-soft: rgba(141, 149, 247, 0.16);
+  --amber: 234 178 84;
+  --red: 239 123 126;
+  --teal: 98 198 189;
+  --plum: 197 150 232;
+  --blue: 122 168 240;
+  --shadow: 0 0 0 1px rgb(52 58 72 / 0.9), 0 16px 40px -8px rgb(0 0 0 / 0.6);
+  font-size: 13px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dark body {
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.7);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+  input,
+  textarea,
+  select {
+    @apply bg-transparent;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--ink3));
+  }
+}
+
+@layer components {
+  .kbd {
+    @apply inline-flex min-w-[1.6em] items-center justify-center rounded px-1 font-mono text-ink2;
+    font-size: 10.5px;
+    line-height: 1.5;
+    border: 1px solid rgb(var(--line2));
+    border-bottom-width: 2px;
+    background: rgb(var(--raise));
+  }
+  .popover {
+    @apply rounded-lg border border-line bg-raise;
+    box-shadow: var(--shadow);
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border border-line px-1.5 text-[11.5px] leading-5 text-ink2;
+  }
+  .row-open {
+    background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgb(var(--panel));
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line2)) transparent;
+  }
+  .headline {
+    @apply font-serif font-normal tracking-[-0.01em] text-ink;
+    font-size: 2.6rem;
+    line-height: 1.1;
+    font-optical-sizing: auto;
+  }
+  .dark .headline {
+    @apply font-sans font-semibold tracking-[-0.015em];
+    font-size: 1.55rem;
+  }
+  .md {
+    @apply text-ink leading-relaxed;
+  }
+  .md > * + * {
+    @apply mt-2;
+  }
+  .md h1,
+  .md h2,
+  .md h3 {
+    @apply font-semibold text-ink;
+  }
+  .md h1 {
+    @apply text-lg;
+  }
+  .md h2 {
+    @apply text-base;
+  }
+  .md ul {
+    @apply list-disc pl-5;
+  }
+  .md ol {
+    @apply list-decimal pl-5;
+  }
+  .md a {
+    @apply text-accent underline underline-offset-2;
+  }
+  .md code {
+    @apply rounded bg-hover px-1 font-mono text-[0.9em];
+  }
+  .md pre {
+    @apply overflow-x-auto rounded-md bg-hover p-2;
+  }
+  .md pre code {
+    @apply bg-transparent p-0;
+  }
+  .md blockquote {
+    @apply border-l-2 border-line2 pl-3 text-ink2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@layer utilities {
+  .anim-rise {
+    animation: rise 140ms ease-out;
+  }
+  .anim-sheet {
+    animation: sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .anim-pane {
+    animation: pane-in 160ms ease-out;
+  }
+}
