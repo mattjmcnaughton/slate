@@ -1,6 +1,7 @@
 """Application configuration via environment variables.
 
-Production (on the Box) uses the defaults: SQL storage, Sign in with Amp, no seed.
+Production (on the Box) uses the defaults: SQL storage (Neon Postgres via
+DATABASE_URL), OIDC sign-in with Auth0, no seed.
 ``just dev`` sets SLATE_STORAGE=memory, SLATE_AUTH=dev, SLATE_SEED=demo.
 """
 
@@ -31,9 +32,8 @@ class Settings(BaseSettings):
 
     # memory: the in-process fake (data is lost on restart). sql: DATABASE_URL.
     slate_storage: Literal["memory", "sql"] = "sql"
-    # dev: always signed in as a fake user. amp: Sign in with Amp.
-    # gate: trust Amp's private-deployment gate; every request is the owner.
-    slate_auth: Literal["dev", "amp", "gate"] = "amp"
+    # dev: always signed in as a fake user. oidc: sign in with OIDC_ISSUER (Auth0).
+    slate_auth: Literal["dev", "oidc"] = "oidc"
     # demo: load sample data at startup when the database is empty.
     slate_seed: Literal["none", "demo"] = "none"
     # Freeze the clock for reproducible dev data, such as 2026-11-21T09:00:00-05:00.
@@ -41,12 +41,17 @@ class Settings(BaseSettings):
 
     # Comma-separated bearer tokens for API clients and agents.
     slate_api_tokens: str = ""
-    # Comma-separated Amp user IDs allowed to sign in. Empty allows nobody in amp mode.
-    slate_allowed_user_ids: str = ""
+    # Comma-separated verified emails allowed to sign in. Empty allows nobody.
+    slate_allowed_emails: str = ""
 
-    amp_oauth_client_id: str = ""
-    amp_oauth_client_secret: str = ""
-    amp_oauth_redirect_uri: str = ""
+    # Exactly as the provider's discovery document reports it (Auth0 ends with "/").
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    # Public base URL, such as https://slate.mattjmcnaughton.com. Amp sets
+    # AMP_DEPLOYMENT_URL on a Box; SLATE_PUBLIC_URL overrides it (custom domain).
+    slate_public_url: str = ""
     amp_deployment_url: str = ""
     app_session_secret: str = ""
 
@@ -55,13 +60,14 @@ class Settings(BaseSettings):
         return frozenset(t.strip() for t in self.slate_api_tokens.split(",") if t.strip())
 
     @property
-    def allowed_user_ids(self) -> frozenset[str]:
-        return frozenset(u.strip() for u in self.slate_allowed_user_ids.split(",") if u.strip())
+    def allowed_emails(self) -> frozenset[str]:
+        return frozenset(
+            e.strip().lower() for e in self.slate_allowed_emails.split(",") if e.strip()
+        )
 
     @property
     def redirect_uri(self) -> str:
-        if self.amp_oauth_redirect_uri:
-            return self.amp_oauth_redirect_uri
-        if self.amp_deployment_url:
-            return self.amp_deployment_url.rstrip("/") + "/auth/callback"
-        return ""
+        if self.oidc_redirect_uri:
+            return self.oidc_redirect_uri
+        base = self.slate_public_url or self.amp_deployment_url
+        return base.rstrip("/") + "/auth/callback" if base else ""

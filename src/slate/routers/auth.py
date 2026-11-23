@@ -1,4 +1,4 @@
-"""Sign in with Amp: /auth/signin, /auth/callback, /auth/signout."""
+"""OIDC sign-in (Auth0): /auth/signin, /auth/callback, /auth/signout."""
 
 from __future__ import annotations
 
@@ -14,9 +14,11 @@ from slate.auth import (
     OAuthError,
     OAuthTransaction,
     SessionAuthenticator,
+    User,
     new_transaction,
 )
 from slate.deps import ContainerDep
+from slate.domain import Account
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,9 +26,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.get("/signin")
 async def signin(container: ContainerDep, return_to: str = "/") -> RedirectResponse:
     if container.oauth is None or container.signer is None:
-        raise HTTPException(503, "Sign in with Amp is not configured on this deployment")
+        raise HTTPException(503, "Sign-in is not configured on this deployment")
     tx = new_transaction(return_to)
-    resp = RedirectResponse(container.oauth.authorization_url(tx), status_code=303)
+    try:
+        url = await container.oauth.authorization_url(tx)
+    except OAuthError as e:
+        raise HTTPException(503, f"Sign-in provider unavailable: {e}") from e
+    resp = RedirectResponse(url, status_code=303)
     resp.set_cookie(
         OAUTH_COOKIE,
         container.signer.dumps(tx.__dict__, salt="oauth"),
@@ -48,7 +54,7 @@ async def callback(
     error: str | None = None,
 ) -> RedirectResponse:
     if container.oauth is None or container.signer is None:
-        raise HTTPException(503, "Sign in with Amp is not configured on this deployment")
+        raise HTTPException(503, "Sign-in is not configured on this deployment")
     if error:
         raise HTTPException(400, f"Sign-in was not completed: {error}")
     raw = request.cookies.get(OAUTH_COOKIE)
@@ -60,11 +66,23 @@ async def callback(
     if not code or state != tx.state:
         raise HTTPException(400, "Sign-in state mismatch; start again")
     try:
-        user = await container.oauth.exchange(code, tx)
+        identity = await container.oauth.exchange(code, tx)
     except OAuthError as e:
         raise HTTPException(400, f"Sign-in failed: {e}") from e
-    if user.id not in container.allowed_user_ids:
-        raise HTTPException(403, f"{user.name} ({user.id}) is not allowed to use this app")
+    # Only verified emails count; the provider leaves email unset otherwise.
+    if not identity.email or identity.email.lower() not in container.allowed_emails:
+        raise HTTPException(403, f"{identity.email or identity.name} may not use this app")
+    async with container.uow_factory() as uow:
+        account = await uow.users.record_sign_in(
+            Account(
+                issuer=identity.issuer,
+                subject=identity.subject,
+                name=identity.name,
+                email=identity.email,
+            )
+        )
+        await uow.commit()
+    user = User(id=str(account.id), name=account.name, email=account.email)
     auth = container.authenticator
     assert isinstance(auth, SessionAuthenticator)
     resp = RedirectResponse(tx.return_to, status_code=303)

@@ -148,6 +148,18 @@ class ActivityRow(Base):
     created_at: Mapped[datetime] = mapped_column(TS)
 
 
+class UserRow(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("issuer", "subject"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    issuer: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(320))
+    created_at: Mapped[datetime] = mapped_column(TS)
+    last_login_at: Mapped[datetime] = mapped_column(TS)
+
+
 class SettingsRow(Base):
     __tablename__ = "settings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

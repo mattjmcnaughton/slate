@@ -9,14 +9,15 @@ from fastapi.testclient import TestClient
 from itsdangerous import URLSafeTimedSerializer
 
 from slate.app import create_app
-from slate.auth import FakeOAuthProvider, SessionAuthenticator, User
+from slate.auth import FakeOAuthProvider, Identity, SessionAuthenticator
 from slate.clock import FixedClock
 from slate.container import Container
 from slate.repositories.memory import MemoryUnitOfWorkFactory
 from slate.seed import seed_if_empty
 
 NOW = datetime(2026, 11, 21, 14, 0, tzinfo=UTC)  # Sat 09:00 in New York
-ME = User(id="user_me", name="Me", email="me@example.com")
+ISSUER = "https://tenant.example.test/"
+ME = Identity(issuer=ISSUER, subject="auth0|me", name="Me", email="me@example.com")
 
 
 def _container(**kw) -> Container:
@@ -26,9 +27,9 @@ def _container(**kw) -> Container:
         clock=clock,
         uow_factory=MemoryUnitOfWorkFactory(clock),
         authenticator=SessionAuthenticator(signer, frozenset({"agent-token"})),
-        oauth=FakeOAuthProvider(kw.pop("user", ME)),
+        oauth=FakeOAuthProvider(kw.pop("identity", ME)),
         signer=signer,
-        allowed_user_ids=frozenset({ME.id}),
+        allowed_emails=frozenset({"me@example.com"}),
         secure_cookies=False,
         **kw,
     )
@@ -55,7 +56,22 @@ def test_requires_auth_until_signed_in(client):
     assert client.get("/api/tasks").status_code == 401
     assert client.get("/healthz").status_code == 200
     _sign_in(client)
-    assert client.get("/api/me").json()["id"] == ME.id
+    me = client.get("/api/me").json()
+    assert (me["name"], me["email"], me["via"]) == ("Me", "me@example.com", "session")
+
+
+async def test_sign_in_records_one_user_per_identity():
+    container = _container()
+    with TestClient(create_app(container, serve_frontend=False)) as c:
+        _sign_in(c)
+        first = c.get("/api/me").json()["id"]
+        c.post("/auth/signout")
+        _sign_in(c)
+        assert c.get("/api/me").json()["id"] == first
+    async with container.uow_factory() as uow:
+        account = await uow.users.get(int(first))
+    assert account is not None
+    assert (account.issuer, account.subject) == (ISSUER, "auth0|me")
 
 
 def test_bearer_token_and_wrong_token(client):
@@ -67,12 +83,18 @@ def test_callback_rejects_bad_state_and_unlisted_user():
     with TestClient(create_app(_container(), serve_frontend=False)) as c:
         c.get("/auth/signin", follow_redirects=False)
         assert c.get("/auth/callback?code=ok&state=forged").status_code == 400
-    stranger = User(id="user_other", name="Other")
-    with TestClient(create_app(_container(user=stranger), serve_frontend=False)) as c:
-        r = c.get("/auth/signin", follow_redirects=False)
-        state = r.headers["location"].split("state=")[1]
-        assert c.get(f"/auth/callback?code=ok&state={state}").status_code == 403
-        assert c.get("/api/tasks").status_code == 401
+    stranger = Identity(issuer=ISSUER, subject="auth0|x", name="X", email="x@example.com")
+    # The provider leaves email unset when it is not verified, even for an allowed address.
+    unverified = Identity(issuer=ISSUER, subject="auth0|me2", name="Me", email=None)
+    for identity in (stranger, unverified):
+        container = _container(identity=identity)
+        with TestClient(create_app(container, serve_frontend=False)) as c:
+            r = c.get("/auth/signin", follow_redirects=False)
+            state = r.headers["location"].split("state=")[1]
+            assert c.get(f"/auth/callback?code=ok&state={state}").status_code == 403
+            assert c.get("/api/tasks").status_code == 401
+        assert isinstance(container.uow_factory, MemoryUnitOfWorkFactory)
+        assert container.uow_factory.db.table("users") == {}
 
 
 def test_cross_origin_cookie_write_is_refused(client):

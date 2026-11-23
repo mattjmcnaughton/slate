@@ -14,11 +14,10 @@ from itsdangerous import URLSafeTimedSerializer
 
 from slate.auth import (
     DEV_USER,
-    OWNER_USER,
-    AmpOAuthProvider,
     Authenticator,
     DevAuthenticator,
     OAuthProvider,
+    OIDCProvider,
     SessionAuthenticator,
 )
 from slate.clock import Clock, FixedClock, SystemClock
@@ -38,7 +37,7 @@ class Container:
     authenticator: Authenticator
     oauth: OAuthProvider | None = None
     signer: URLSafeTimedSerializer | None = None
-    allowed_user_ids: frozenset[str] = frozenset()
+    allowed_emails: frozenset[str] = frozenset()
     secure_cookies: bool = True
     # Run in order at startup (migrations, seeding); each gets the container.
     startup: list[Callable[[Container], Awaitable[None]]] = field(default_factory=list)
@@ -46,12 +45,14 @@ class Container:
 
 
 def oauth_configuration_error(settings: Settings) -> str | None:
-    if not settings.amp_oauth_client_id or not settings.amp_oauth_client_secret:
-        return "Sign in with Amp is not configured (AMP_OAUTH_CLIENT_ID / SECRET)."
+    if not settings.oidc_issuer:
+        return "Sign-in is not configured (OIDC_ISSUER)."
+    if not settings.oidc_client_id or not settings.oidc_client_secret:
+        return "Sign-in is not configured (OIDC_CLIENT_ID / OIDC_CLIENT_SECRET)."
     if len(settings.app_session_secret) < 32:
         return "APP_SESSION_SECRET must be at least 32 characters."
     if not settings.redirect_uri:
-        return "No redirect URI (set AMP_OAUTH_REDIRECT_URI or AMP_DEPLOYMENT_URL)."
+        return "No redirect URI (set OIDC_REDIRECT_URI, SLATE_PUBLIC_URL, or AMP_DEPLOYMENT_URL)."
     return None
 
 
@@ -85,12 +86,11 @@ def build_container(settings: Settings) -> Container:
         startup.append(seed_if_empty)
 
     secure = not settings.redirect_uri.startswith("http://")
-    if settings.slate_auth in ("dev", "gate"):
-        user = OWNER_USER if settings.slate_auth == "gate" else DEV_USER
+    if settings.slate_auth == "dev":
         return Container(
             clock=clock,
             uow_factory=uow_factory,
-            authenticator=DevAuthenticator(settings.api_tokens, user),
+            authenticator=DevAuthenticator(settings.api_tokens, DEV_USER),
             startup=startup,
             shutdown=shutdown,
             secure_cookies=False,
@@ -101,9 +101,10 @@ def build_container(settings: Settings) -> Container:
     secret = settings.app_session_secret or __import__("secrets").token_urlsafe(48)
     signer = URLSafeTimedSerializer(secret)
     oauth = (
-        AmpOAuthProvider(
-            settings.amp_oauth_client_id,
-            settings.amp_oauth_client_secret,
+        OIDCProvider(
+            settings.oidc_issuer,
+            settings.oidc_client_id,
+            settings.oidc_client_secret,
             settings.redirect_uri,
         )
         if oauth_configuration_error(settings) is None
@@ -115,7 +116,7 @@ def build_container(settings: Settings) -> Container:
         authenticator=SessionAuthenticator(signer, settings.api_tokens),
         oauth=oauth,
         signer=signer,
-        allowed_user_ids=settings.allowed_user_ids,
+        allowed_emails=settings.allowed_emails,
         secure_cookies=secure,
         startup=startup,
         shutdown=shutdown,

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Protocol, Self
 
 if TYPE_CHECKING:
     from slate.domain import (
+        Account,
         Activity,
         Area,
         Comment,
@@ -90,7 +91,15 @@ class SettingsRepository(Protocol):
     async def save(self, settings: Settings) -> Settings: ...
 
 
+class UserRepository(Protocol):
+    async def get(self, id: int) -> Account | None: ...
+    async def record_sign_in(self, account: Account) -> Account:
+        """Upsert by (issuer, subject): refresh name and email, stamp ``last_login_at``."""
+        ...
+
+
 class UnitOfWork(Protocol):
+    users: UserRepository
     areas: AreaRepository
     projects: ProjectRepository
     labels: LabelRepository

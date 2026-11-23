@@ -72,7 +72,7 @@ Layering: `routers -> controllers -> services -> repositories`.
 
 - `clock`: `SystemClock` in production, `FixedClock` in tests and seeded dev.
 - `uow_factory`: SQL or memory.
-- `authenticator`: `AmpAuthenticator` (OAuth) in production,
+- `authenticator`: `SessionAuthenticator` (OIDC sign-in with Auth0) in production,
   `DevAuthenticator` (always signed in as a fake user) locally.
 
 No mocks: tests use the memory repositories, the fixed clock, and the dev
@@ -88,15 +88,16 @@ tasks, overdue and upcoming tasks, subtasks, labels, comments, and activity.
 
 ## Database
 
-SQLite by default (`sqlite+aiosqlite:///...`). Postgres by setting
-`DATABASE_URL=postgresql+asyncpg://...` and installing the `postgres` extra.
+Postgres in production (Neon, `DATABASE_URL=postgresql+asyncpg://...?ssl=verify-full`,
+with `PGSSLROOTCERT` pointing at a CA bundle). SQLite (`sqlite+aiosqlite:///...`)
+remains the local default when `DATABASE_URL` is unset.
 Alembic migrations use `render_as_batch=True` so they run on SQLite. In
 production the app runs migrations on startup.
 
 ## HTTP API
 
 JSON under `/api`. Full schema at `/docs` (OpenAPI). Authentication: the browser
-uses a signed session cookie from Sign in with Amp; agents and scripts send
+uses a signed session cookie set after OIDC sign-in (Auth0); agents and scripts send
 `Authorization: Bearer <token>` with a token from `SLATE_API_TOKENS`.
 
 | Method and path | Purpose |
@@ -117,11 +118,28 @@ uses a signed session cookie from Sign in with Amp; agents and scripts send
 | `POST /api/parse` | Live quick-add preview: parsed fields and highlight tokens |
 | `POST /api/import` | Idempotent bulk upsert by `(source, source_id)` with original timestamps |
 
+## Users
+
+Sign-in upserts a row in `users` keyed by the provider's `(issuer, subject)`, so
+each person has a stable local id. Who may sign in is `SLATE_ALLOWED_EMAILS`
+(verified emails only). Tasks are not yet scoped per user: everyone allowed in
+shares one workspace.
+
 ## Deployment
 
-An Amp Box (`b1.tiny`). The build bundles a relocatable CPython
+The `slate` deployment on the Amp Box `mattjmcnaughton/apps`, public at
+https://slate.mattjmcnaughton.com. The build bundles a relocatable CPython
 (python-build-standalone via `uv python install`) and the installed packages,
-because Boxes do not guarantee a Python runtime. SQLite lives in
-`$AMP_DEPLOYMENT_DATA_DIRECTORY`. The deployment is public at the network level
-and protected in the app: Sign in with Amp restricted to `SLATE_ALLOWED_USER_IDS`,
-plus bearer tokens for API clients.
+because Boxes do not guarantee a Python runtime. `.box/run.sh` sets
+`PGSSLROOTCERT` to the bundled certifi CA file.
+
+| Piece | Where |
+| --- | --- |
+| Database | Neon project `slate` (`dark-meadow-34017316`), database `slate`, role `slate_owner`. The app runs migrations at startup. |
+| Sign-in | Auth0 application `slate`, callbacks `https://slate.mattjmcnaughton.com/auth/callback` and `https://slate--mattjmcnaughton.onamp.dev/auth/callback`. |
+| Plain env (`.amp/box.yaml`) | `SLATE_AUTH=oidc`, `OIDC_ISSUER` (exactly as discovery reports it, with the trailing `/`), `SLATE_PUBLIC_URL`. |
+| Secrets | `DATABASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_SESSION_SECRET` (32+ chars), `SLATE_API_TOKENS`, `SLATE_ALLOWED_EMAILS` (comma-separated). Stored as `KEY='value'` lines in `secrets.env` in the deployment's data directory (copied with `amp boxes cp`, mode 600), which `.box/run.sh` loads; Amp deployment secrets work too. |
+
+Deploy pushed code with `amp boxes deploy --domain slate.mattjmcnaughton.com`.
+Check it with `curl -s https://slate.mattjmcnaughton.com/readyz` and confirm
+`/api/tasks` returns 401 without credentials.

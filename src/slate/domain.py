@@ -145,6 +145,19 @@ class Settings:
     timezone: str = "America/New_York"
 
 
+@dataclass
+class Account:
+    """A person who has signed in, keyed by their identity provider's (issuer, subject)."""
+
+    issuer: str
+    subject: str
+    name: str
+    email: str | None = None
+    id: int | None = None
+    created_at: datetime | None = None
+    last_login_at: datetime | None = None
+
+
 @dataclass(frozen=True)
 class TaskFilter:
     """Criteria for listing tasks. Unset fields do not filter.

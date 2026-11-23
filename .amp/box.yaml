@@ -1,12 +1,17 @@
 build: bash scripts/box-build.sh
 source: false
 artifacts: [.box]
+# Public deployment: slate's own Auth0 sign-in (SLATE_ALLOWED_EMAILS) and bearer
+# tokens guard every /api route. Secrets live on the Box, never in Git:
+# DATABASE_URL (Neon, postgresql+asyncpg://...?ssl=verify-full), OIDC_CLIENT_ID,
+# OIDC_CLIENT_SECRET, APP_SESSION_SECRET, SLATE_API_TOKENS, SLATE_ALLOWED_EMAILS,
+# in $AMP_DEPLOYMENT_DATA_DIRECTORY/secrets.env (loaded by .box/run.sh).
 services:
   web:
     command: sh .box/run.sh
     env:
       SLATE_STORAGE: sql
-      # Private deployment: Amp's gate admits only the owner. Switch to amp
-      # once a Sign in with Amp client exists.
-      SLATE_AUTH: gate
+      SLATE_AUTH: oidc
+      OIDC_ISSUER: https://dev-evqkptxpc4td3ce4.us.auth0.com/
+      SLATE_PUBLIC_URL: https://slate.mattjmcnaughton.com
       LOG_LEVEL: INFO

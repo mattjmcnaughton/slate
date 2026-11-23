@@ -12,7 +12,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Self
 
-from slate.domain import Activity, Area, Comment, Label, Project, Settings, Task
+from slate.domain import Account, Activity, Area, Comment, Label, Project, Settings, Task
 from slate.repositories.base import NotFoundError
 from slate.repositories.filtering import matches, sort_tasks
 
@@ -174,8 +174,36 @@ class MemorySettingsRepository:
         return copy.deepcopy(settings)
 
 
+class MemoryUserRepository:
+    def __init__(self, db: MemoryDatabase, clock: Clock) -> None:
+        self.rows: dict[int, Account] = db.table("users")
+        self.db = db
+        self.clock = clock
+
+    async def get(self, id: int) -> Account | None:
+        return copy.deepcopy(self.rows.get(id))
+
+    async def record_sign_in(self, account: Account) -> Account:
+        now = self.clock.now()
+        row = next(
+            (
+                r
+                for r in self.rows.values()
+                if (r.issuer, r.subject) == (account.issuer, account.subject)
+            ),
+            None,
+        )
+        if row is None:
+            new_id = self.db.next_id("users")
+            row = Account(account.issuer, account.subject, account.name, id=new_id, created_at=now)
+            self.rows[new_id] = row
+        row.name, row.email, row.last_login_at = account.name, account.email, now
+        return copy.deepcopy(row)
+
+
 class MemoryUnitOfWork:
     def __init__(self, db: MemoryDatabase, clock: Clock) -> None:
+        self.users = MemoryUserRepository(db, clock)
         self.areas = MemoryAreaRepository(db, clock)
         self.projects = MemoryProjectRepository(db, clock)
         self.labels = MemoryLabelRepository(db, clock)

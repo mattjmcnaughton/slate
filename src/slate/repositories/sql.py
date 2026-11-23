@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from slate.domain import (
     CLOSED_STATUSES,
+    Account,
     Activity,
     Area,
     Comment,
@@ -32,6 +33,7 @@ from slate.models import (
     SettingsRow,
     TaskLabelRow,
     TaskRow,
+    UserRow,
 )
 from slate.repositories.base import NotFoundError
 from slate.scheduling import Recurrence, RecurrenceMode
@@ -454,6 +456,41 @@ class SqlSettingsRepository:
         return settings
 
 
+class SqlUserRepository:
+    def __init__(self, session: AsyncSession, clock: Clock) -> None:
+        self.s = session
+        self.clock = clock
+
+    @staticmethod
+    def _entity(row: UserRow) -> Account:
+        return Account(
+            issuer=row.issuer,
+            subject=row.subject,
+            name=row.name,
+            email=row.email,
+            id=row.id,
+            created_at=row.created_at,
+            last_login_at=row.last_login_at,
+        )
+
+    async def get(self, id: int) -> Account | None:
+        row = await self.s.get(UserRow, id)
+        return self._entity(row) if row else None
+
+    async def record_sign_in(self, account: Account) -> Account:
+        now = self.clock.now()
+        q = select(UserRow).where(
+            UserRow.issuer == account.issuer, UserRow.subject == account.subject
+        )
+        row = (await self.s.execute(q)).scalar_one_or_none()
+        if row is None:
+            row = UserRow(issuer=account.issuer, subject=account.subject, created_at=now)
+            self.s.add(row)
+        row.name, row.email, row.last_login_at = account.name, account.email, now
+        await self.s.flush()
+        return self._entity(row)
+
+
 class SqlUnitOfWork:
     def __init__(self, sessionmaker: async_sessionmaker[AsyncSession], clock: Clock) -> None:
         self._sessionmaker = sessionmaker
@@ -462,6 +499,7 @@ class SqlUnitOfWork:
     async def __aenter__(self) -> Self:
         s = self._sessionmaker()
         self.session = s
+        self.users = SqlUserRepository(s, self._clock)
         self.areas = SqlAreaRepository(s, self._clock)
         self.projects = SqlProjectRepository(s, self._clock)
         self.labels = SqlLabelRepository(s, self._clock)

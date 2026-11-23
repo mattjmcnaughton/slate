@@ -38,6 +38,12 @@ cat > .box/run.sh <<'EOF'
 here="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="$here/app:$here/site"
 export PYTHONDONTWRITEBYTECODE=1
+# asyncpg's ssl=verify-full needs a CA bundle; Boxes do not promise one.
+export PGSSLROOTCERT="$here/site/certifi/cacert.pem"
+# Secrets copied onto the Box with `amp boxes cp` (KEY='value' lines), kept out
+# of Git and transcripts. Values here override deployment env and secrets.
+secrets="${AMP_DEPLOYMENT_DATA_DIRECTORY:-}/secrets.env"
+if [ -f "$secrets" ]; then set -a; . "$secrets"; set +a; fi
 exec "$here/python/bin/python3" -m slate
 EOF
 chmod +x .box/run.sh

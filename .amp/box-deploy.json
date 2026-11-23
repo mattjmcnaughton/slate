@@ -2,8 +2,7 @@
   "targets": {
     "default": {
       "on": "mattjmcnaughton/apps",
-      "name": "slate",
-      "private": true
+      "name": "slate"
     }
   }
 }
