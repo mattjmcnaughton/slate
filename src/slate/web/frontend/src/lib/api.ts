@@ -28,6 +28,7 @@ export interface Recurrence {
 
 export interface Area {
   id: number;
+  uuid: string;
   name: string;
   color: string;
   position: number;
@@ -41,6 +42,7 @@ export interface AreaIn {
 
 export interface Project {
   id: number;
+  uuid: string;
   name: string;
   area_id: number | null;
   status: ProjectStatus;
@@ -69,12 +71,14 @@ export type ProjectPatch = Partial<ProjectIn>;
 
 export interface Label {
   id: number;
+  uuid: string;
   name: string;
   color: string;
 }
 
 export interface Task {
   id: number;
+  uuid: string;
   key: string;
   title: string;
   description: string;
@@ -135,6 +139,7 @@ export interface CompleteResult {
 
 export interface Comment {
   id: number;
+  uuid: string;
   task_id: number;
   body: string;
   created_at: string;

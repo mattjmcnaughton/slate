@@ -195,7 +195,14 @@ class MemoryUserRepository:
         )
         if row is None:
             new_id = self.db.next_id("users")
-            row = Account(account.issuer, account.subject, account.name, id=new_id, created_at=now)
+            row = Account(
+                account.issuer,
+                account.subject,
+                account.name,
+                id=new_id,
+                uuid=account.uuid,
+                created_at=now,
+            )
             self.rows[new_id] = row
         row.name, row.email, row.last_login_at = account.name, account.email, now
         return copy.deepcopy(row)

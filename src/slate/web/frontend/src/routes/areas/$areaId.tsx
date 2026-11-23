@@ -16,9 +16,9 @@ export const Route = createFileRoute("/areas/$areaId")({
 
 function AreaPage() {
   const { areaId } = Route.useParams();
-  const id = Number(areaId);
   const lookups = useLookups();
-  const area = lookups.areas.get(id);
+  const area = lookups.areasByUuid.get(areaId);
+  const id = area?.id ?? -1;
   const { data } = useTasks({ area_id: id, parent_id: 0, sort: "due" });
   usePageContext({ areaId: id, projectId: null }, [id]);
   if (!area) return lookups.areas.size ? <Empty title="This area does not exist" /> : null;

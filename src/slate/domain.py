@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Any
+from uuid import UUID, uuid4
 
 from slate.scheduling import Recurrence
 
@@ -51,6 +52,7 @@ class Area:
     source: str | None = None
     source_id: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -67,6 +69,7 @@ class Project:
     source: str | None = None
     source_id: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -78,6 +81,7 @@ class Label:
     source: str | None = None
     source_id: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -101,6 +105,7 @@ class Task:
     source: str | None = None
     source_id: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -120,6 +125,7 @@ class Comment:
     source: str | None = None
     source_id: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -154,6 +160,7 @@ class Account:
     name: str
     email: str | None = None
     id: int | None = None
+    uuid: UUID = field(default_factory=uuid4)
     created_at: datetime | None = None
     last_login_at: datetime | None = None
 

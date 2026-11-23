@@ -258,7 +258,7 @@ function PaletteDialog({ mode }: { mode: "commands" | "search" }) {
       label: p.name,
       icon: <Dot color={p.color ?? area?.color ?? "rgb(var(--ink3))"} />,
       hint: area?.name,
-      run: () => navigate({ to: "/projects/$projectId", params: { projectId: String(p.id) } }),
+      run: () => navigate({ to: "/projects/$projectId", params: { projectId: p.uuid } }),
     };
   });
 

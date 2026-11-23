@@ -284,7 +284,7 @@ function Sidebar() {
               {area ? (
                 <Link
                   to="/areas/$areaId"
-                  params={{ areaId: String(area.id) }}
+                  params={{ areaId: area.uuid }}
                   className="flex h-7 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-ink hover:bg-hover"
                   activeProps={{ className: "!bg-accent-soft font-medium" }}
                 >
@@ -298,7 +298,7 @@ function Sidebar() {
                 <Link
                   key={p.id}
                   to="/projects/$projectId"
-                  params={{ projectId: String(p.id) }}
+                  params={{ projectId: p.uuid }}
                   className="flex h-7 items-center gap-2 rounded-md pl-[30px] pr-2.5 text-[13px] text-ink2 hover:bg-hover hover:text-ink"
                   activeProps={{ className: "!bg-accent-soft !text-ink font-medium" }}
                 >

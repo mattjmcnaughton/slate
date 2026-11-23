@@ -91,6 +91,10 @@ tasks, overdue and upcoming tasks, subtasks, labels, comments, and activity.
 Postgres in production (Neon, `DATABASE_URL=postgresql+asyncpg://...?ssl=verify-full`,
 with `PGSSLROOTCERT` pointing at a CA bundle). SQLite (`sqlite+aiosqlite:///...`)
 remains the local default when `DATABASE_URL` is unset.
+
+Every entity table has an integer `id` (primary and foreign keys, API paths)
+and a unique `uuid` (`uuid4`, set when the entity is created). URLs in the web
+app use the uuid, as in `/projects/<uuid>` and `/areas/<uuid>`.
 Alembic migrations use `render_as_batch=True` so they run on SQLite. In
 production the app runs migrations on startup.
 

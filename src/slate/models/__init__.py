@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, time
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import (
     JSON,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -56,6 +58,7 @@ class AreaRow(SourceMixin, Base):
     __tablename__ = "areas"
     __table_args__ = (UniqueConstraint("source", "source_id"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     name: Mapped[str] = mapped_column(String(200))
     color: Mapped[str] = mapped_column(String(16))
     position: Mapped[int] = mapped_column(Integer, default=0)
@@ -67,6 +70,7 @@ class ProjectRow(SourceMixin, Base):
     __tablename__ = "projects"
     __table_args__ = (UniqueConstraint("source", "source_id"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     name: Mapped[str] = mapped_column(String(200))
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id", ondelete="SET NULL"))
     status: Mapped[str] = mapped_column(String(16))
@@ -82,6 +86,7 @@ class LabelRow(SourceMixin, Base):
     __tablename__ = "labels"
     __table_args__ = (UniqueConstraint("source", "source_id"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     name: Mapped[str] = mapped_column(String(100))
     color: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(TS)
@@ -97,6 +102,7 @@ class TaskRow(SourceMixin, Base):
         Index("ix_tasks_parent_id", "parent_id"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16))
@@ -132,6 +138,7 @@ class CommentRow(SourceMixin, Base):
     __tablename__ = "comments"
     __table_args__ = (UniqueConstraint("source", "source_id"), Index("ix_comments_task", "task_id"))
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TS)
@@ -152,6 +159,7 @@ class UserRow(Base):
     __tablename__ = "users"
     __table_args__ = (UniqueConstraint("issuer", "subject"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[UUID] = mapped_column(Uuid, unique=True)
     issuer: Mapped[str] = mapped_column(String(255))
     subject: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(200))

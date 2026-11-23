@@ -96,6 +96,9 @@ async def test_round_trip_and_filters(uow_factory):
     async with uow_factory() as uow:
         got = await uow.tasks.get(t["b"].id)
         assert got.recurrence == t["b"].recurrence
+        # The public uuid is kept as given, and distinct per entity.
+        assert got.uuid == t["b"].uuid != t["a"].uuid
+        assert (await uow.projects.get(kitchen.id)).uuid == kitchen.uuid
         assert got.created_at == NOW
         assert (await uow.tasks.get(t["a"].id)).label_ids == [errand.id]
 

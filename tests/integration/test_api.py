@@ -60,7 +60,7 @@ def test_requires_auth_until_signed_in(client):
     assert (me["name"], me["email"], me["via"]) == ("Me", "me@example.com", "session")
 
 
-async def test_sign_in_records_one_user_per_identity():
+def test_sign_in_records_one_user_per_identity():
     container = _container()
     with TestClient(create_app(container, serve_frontend=False)) as c:
         _sign_in(c)
@@ -68,10 +68,9 @@ async def test_sign_in_records_one_user_per_identity():
         c.post("/auth/signout")
         _sign_in(c)
         assert c.get("/api/me").json()["id"] == first
-    async with container.uow_factory() as uow:
-        account = await uow.users.get(int(first))
-    assert account is not None
-    assert (account.issuer, account.subject) == (ISSUER, "auth0|me")
+    assert isinstance(container.uow_factory, MemoryUnitOfWorkFactory)
+    [account] = container.uow_factory.db.table("users").values()
+    assert (str(account.uuid), account.issuer, account.subject) == (first, ISSUER, "auth0|me")
 
 
 def test_bearer_token_and_wrong_token(client):

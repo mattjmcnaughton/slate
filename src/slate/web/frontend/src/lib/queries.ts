@@ -127,6 +127,9 @@ export interface Lookups {
   areas: Map<number, Area>;
   projects: Map<number, Project>;
   labels: Map<number, Label>;
+  /** By uuid, the identifier URLs use. */
+  areasByUuid: Map<string, Area>;
+  projectsByUuid: Map<string, Project>;
 }
 
 export function useLookups(): Lookups {
@@ -138,6 +141,8 @@ export function useLookups(): Lookups {
       areas: new Map((areas ?? []).map((a) => [a.id, a])),
       projects: new Map((projects ?? []).map((p) => [p.id, p])),
       labels: new Map((labels ?? []).map((l) => [l.id, l])),
+      areasByUuid: new Map((areas ?? []).map((a) => [a.uuid, a])),
+      projectsByUuid: new Map((projects ?? []).map((p) => [p.uuid, p])),
     }),
     [areas, projects, labels],
   );
@@ -392,6 +397,19 @@ export function useCommentMutations(taskId: number) {
       onSettled: settle,
     }),
   };
+}
+
+/** Tasks in a deleted project are kept; the server moves them to the Inbox. */
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteProject(id),
+    onSuccess: (_, id) => {
+      qc.setQueryData<Project[]>(qk.projects, (old) => old?.filter((p) => p.id !== id));
+    },
+    onError: errorToast,
+    onSettled: () => invalidateTasks(qc),
+  });
 }
 
 export function useCreateLabel() {

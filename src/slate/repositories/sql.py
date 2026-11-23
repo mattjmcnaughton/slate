@@ -58,7 +58,7 @@ _SIMPLE = {
     "comments": (CommentRow, Comment, ("task_id", "body")),
 }
 
-_COMMON = ("id", "source", "source_id", "created_at", "updated_at")
+_COMMON = ("id", "uuid", "source", "source_id", "created_at", "updated_at")
 
 
 def _to_entity(name: str, row: Any) -> Any:
@@ -89,6 +89,7 @@ def _task_to_entity(row: TaskRow, label_ids: list[int]) -> Task:
         )
     return Task(
         id=row.id,
+        uuid=row.uuid,
         title=row.title,
         description=row.description or "",
         status=TaskStatus(row.status),
@@ -168,7 +169,7 @@ class _SqlRepo:
         if entity.source and await self.get_by_source(entity.source, entity.source_id):
             raise ValueError(f"duplicate {self.name} source {entity.source}:{entity.source_id}")
         now = self.clock.now()
-        row = self.row_cls()
+        row = self.row_cls(uuid=entity.uuid)
         _fill_row(self.name, row, entity)
         row.created_at = entity.created_at or now
         row.updated_at = entity.updated_at or row.created_at
@@ -303,7 +304,7 @@ class SqlTaskRepository:
         if entity.source and await self.get_by_source(entity.source, entity.source_id or ""):
             raise ValueError(f"duplicate tasks source {entity.source}:{entity.source_id}")
         now = self.clock.now()
-        row = TaskRow()
+        row = TaskRow(uuid=entity.uuid)
         _fill_task_row(row, entity)
         row.created_at = entity.created_at or now
         row.updated_at = entity.updated_at or row.created_at
@@ -469,6 +470,7 @@ class SqlUserRepository:
             name=row.name,
             email=row.email,
             id=row.id,
+            uuid=row.uuid,
             created_at=row.created_at,
             last_login_at=row.last_login_at,
         )
@@ -484,7 +486,9 @@ class SqlUserRepository:
         )
         row = (await self.s.execute(q)).scalar_one_or_none()
         if row is None:
-            row = UserRow(issuer=account.issuer, subject=account.subject, created_at=now)
+            row = UserRow(
+                uuid=account.uuid, issuer=account.issuer, subject=account.subject, created_at=now
+            )
             self.s.add(row)
         row.name, row.email, row.last_login_at = account.name, account.email, now
         await self.s.flush()

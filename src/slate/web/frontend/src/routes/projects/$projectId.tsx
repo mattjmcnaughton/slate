@@ -9,9 +9,10 @@ import {
   usePageContext,
 } from "../../components/TaskList";
 import { ProgressBar } from "../../components/TaskMeta";
-import { Dot, IconBoard, IconList, IconRepeat, STATUSES } from "../../components/icons";
+import { Dot, IconBoard, IconList, IconRepeat, IconTrash, STATUSES } from "../../components/icons";
 import { diffDays, formatShort } from "../../lib/dates";
-import { useLookups, useTasks, useToday } from "../../lib/queries";
+import { useDeleteProject, useLookups, useTasks, useToday } from "../../lib/queries";
+import { useUI } from "../../stores/ui";
 
 type View = "list" | "board";
 
@@ -33,11 +34,30 @@ function ProjectPage() {
   const { projectId } = Route.useParams();
   const { view = "list" } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const id = Number(projectId);
   const lookups = useLookups();
   const today = useToday();
-  const project = lookups.projects.get(id);
+  const project = lookups.projectsByUuid.get(projectId);
+  const id = project?.id ?? -1;
   const area = project?.area_id ? lookups.areas.get(project.area_id) : undefined;
+  const remove = useDeleteProject();
+  const confirmDelete = () => {
+    if (!project) return;
+    const n = project.progress_total;
+    useUI.getState().setConfirm({
+      title: `Delete ${project.name}?`,
+      body: n
+        ? `Its ${n} ${n === 1 ? "task moves" : "tasks move"} to the Inbox. This cannot be undone.`
+        : "This cannot be undone.",
+      confirmLabel: "Delete",
+      onConfirm: () =>
+        remove.mutate(project.id, {
+          onSuccess: () => {
+            navigate({ to: "/projects" });
+            useUI.getState().toast({ message: "Project deleted" });
+          },
+        }),
+    });
+  };
   const { data: tasks } = useTasks({
     project_id: id,
     parent_id: 0,
@@ -76,6 +96,18 @@ function ProjectPage() {
       )}
       <ProgressBar done={project.progress_done} total={project.progress_total} />
     </span>
+  );
+
+  const deleteButton = (
+    <button
+      type="button"
+      aria-label="Delete project"
+      title="Delete project"
+      onClick={confirmDelete}
+      className="rounded p-1.5 text-ink3 hover:bg-hover hover:text-red"
+    >
+      <IconTrash size={15} />
+    </button>
   );
 
   const toggle = (
@@ -125,7 +157,16 @@ function ProjectPage() {
 
   return (
     <div className={view === "board" ? "" : "mx-auto max-w-[920px]"}>
-      <PageHeader title={project.name} sub={sub} actions={toggle}>
+      <PageHeader
+        title={project.name}
+        sub={sub}
+        actions={
+          <div className="flex items-center gap-2">
+            {toggle}
+            {deleteButton}
+          </div>
+        }
+      >
         {project.description && (
           <p className="mt-2 max-w-[68ch] text-[13px] leading-relaxed text-ink2">
             {project.description}

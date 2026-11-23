@@ -7,6 +7,7 @@ sending ``"due_date": null`` clears the date, leaving it out keeps it.
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -60,6 +61,7 @@ class AreaPatch(Model):
 
 class AreaOut(Model):
     id: int
+    uuid: UUID
     name: str
     color: str
     position: int
@@ -87,6 +89,7 @@ class ProjectPatch(Model):
 
 class ProjectOut(Model):
     id: int
+    uuid: UUID
     name: str
     area_id: int | None
     status: ProjectStatus
@@ -113,6 +116,7 @@ class LabelPatch(Model):
 
 class LabelOut(Model):
     id: int
+    uuid: UUID
     name: str
     color: str
 
@@ -159,6 +163,7 @@ class TaskPatch(Model):
 
 class TaskOut(Model):
     id: int
+    uuid: UUID
     key: str
     title: str
     description: str
@@ -195,6 +200,7 @@ class CommentIn(Model):
 
 class CommentOut(Model):
     id: int
+    uuid: UUID
     task_id: int
     body: str
     created_at: datetime

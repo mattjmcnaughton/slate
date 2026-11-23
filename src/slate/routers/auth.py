@@ -82,7 +82,7 @@ async def callback(
             )
         )
         await uow.commit()
-    user = User(id=str(account.id), name=account.name, email=account.email)
+    user = User(id=str(account.uuid), name=account.name, email=account.email)
     auth = container.authenticator
     assert isinstance(auth, SessionAuthenticator)
     resp = RedirectResponse(tx.return_to, status_code=303)
