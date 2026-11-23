@@ -2,7 +2,8 @@
   "targets": {
     "default": {
       "on": "mattjmcnaughton/apps",
-      "name": "slate"
+      "name": "slate",
+      "domain": "slate.mattjmcnaughton.com"
     }
   }
 }
