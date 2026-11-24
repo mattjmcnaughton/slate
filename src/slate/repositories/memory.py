@@ -9,6 +9,7 @@ Owned repositories see only rows of the unit of work's workspace.
 
 from __future__ import annotations
 
+import builtins
 import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Self
@@ -16,10 +17,14 @@ from typing import TYPE_CHECKING, Any, Self
 from slate.domain import (
     Account,
     Activity,
+    AgentMessage,
+    AgentMode,
     ApiKey,
     Area,
     Comment,
     Label,
+    PendingChange,
+    PendingStatus,
     Project,
     Settings,
     Task,
@@ -227,11 +232,69 @@ class MemorySettingsRepository(_Owned):
         return ws
 
     async def get(self) -> Settings:
-        return Settings(timezone=self._workspace().timezone)
+        w = self._workspace()
+        return Settings(
+            timezone=w.timezone,
+            agent_enabled=w.agent_enabled,
+            agent_mode=AgentMode(w.agent_mode),
+            agent_instructions=w.agent_instructions,
+        )
 
     async def save(self, settings: Settings) -> Settings:
-        self._workspace().timezone = settings.timezone
+        w = self._workspace()
+        w.timezone = settings.timezone
+        w.agent_enabled = settings.agent_enabled
+        w.agent_mode = str(settings.agent_mode)
+        w.agent_instructions = settings.agent_instructions
         return copy.deepcopy(settings)
+
+
+class MemoryPendingChangeRepository(_Owned):
+    name = "pending_changes"
+
+    async def add(self, change: PendingChange) -> PendingChange:
+        c = copy.deepcopy(change)
+        c.workspace_id = self.ws
+        c.created_at = c.created_at or self.clock.now()
+        self.db.table(self.name)[c.id] = c
+        return copy.deepcopy(c)
+
+    async def get(self, id: UUID) -> PendingChange | None:
+        row = self.db.table(self.name).get(id)
+        return copy.deepcopy(row) if row is not None and row.workspace_id == self.ws else None
+
+    async def list(self, status: PendingStatus | None = None) -> builtins.list[PendingChange]:
+        rows = [r for r in self.mine(self.name) if status is None or r.status == status]
+        return [copy.deepcopy(r) for r in sorted(rows, key=lambda r: (r.created_at, r.id))]
+
+    async def resolve(self, change: PendingChange) -> bool:
+        row = self.db.table(self.name).get(change.id)
+        if row is None or row.workspace_id != self.ws or row.status != PendingStatus.PENDING:
+            return False
+        row.status, row.error, row.result = change.status, change.error, change.result
+        row.input = copy.deepcopy(change.input)
+        row.resolved_at = self.clock.now()
+        return True
+
+
+class MemoryAgentMessageRepository(_Owned):
+    name = "agent_messages"
+
+    async def add(self, m: AgentMessage) -> AgentMessage:
+        c = copy.deepcopy(m)
+        c.workspace_id = self.ws
+        c.created_at = c.created_at or self.clock.now()
+        self.db.table(self.name)[c.id] = c
+        return copy.deepcopy(c)
+
+    async def list_for_user(self, user_id: UUID) -> list[AgentMessage]:
+        rows = [r for r in self.mine(self.name) if r.user_id == user_id]
+        return [copy.deepcopy(r) for r in sorted(rows, key=lambda r: (r.created_at, r.id))]
+
+    async def clear(self, user_id: UUID) -> None:
+        table = self.db.table(self.name)
+        for r in [r for r in self.mine(self.name) if r.user_id == user_id]:
+            del table[r.id]
 
 
 class MemoryUserRepository:
@@ -318,6 +381,8 @@ class MemoryUnitOfWork:
         self.comments = MemoryCommentRepository(db, clock, workspace_id)
         self.activity = MemoryActivityRepository(db, clock, workspace_id)
         self.settings = MemorySettingsRepository(db, clock, workspace_id)
+        self.pending_changes = MemoryPendingChangeRepository(db, clock, workspace_id)
+        self.agent_messages = MemoryAgentMessageRepository(db, clock, workspace_id)
 
     async def __aenter__(self) -> Self:
         return self

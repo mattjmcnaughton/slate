@@ -12,6 +12,7 @@ import {
   type Agenda,
   type Area,
   type Label,
+  type PendingChange,
   type Project,
   type QuickAddIn,
   type Task,
@@ -35,6 +36,9 @@ export const qk = {
   agenda: (days: number) => ["agenda", days] as const,
   parse: (text: string) => ["parse", text] as const,
   apiKeys: ["api-keys"] as const,
+  agentSettings: ["agent-settings"] as const,
+  pending: ["pending-changes"] as const,
+  conversation: ["conversation"] as const,
 };
 
 // --- reads ------------------------------------------------------------------------
@@ -449,6 +453,59 @@ export function useApiKeyMutations() {
       onError: errorToast,
       onSuccess: () => useUI.getState().toast({ message: "Key revoked" }),
       onSettled: refresh,
+    }),
+  };
+}
+
+// --- assistant ---------------------------------------------------------------------
+
+export const useAgentSettings = () =>
+  useQuery({ queryKey: qk.agentSettings, queryFn: api.agentSettings });
+
+export function usePatchAgentSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.patchAgentSettings,
+    onError: errorToast,
+    onSuccess: (s) => qc.setQueryData(qk.agentSettings, s),
+  });
+}
+
+/** Every Pending change, newest last; cards and the nav badge read from here. */
+export const usePendingChanges = () =>
+  useQuery({ queryKey: qk.pending, queryFn: () => api.pendingChanges("all") });
+
+export function rememberPending(qc: QueryClient, change: PendingChange) {
+  qc.setQueryData<PendingChange[]>(qk.pending, (old) => {
+    const rest = (old ?? []).filter((p) => p.id !== change.id);
+    return [...rest, change];
+  });
+}
+
+/** Lists, agenda, and projects may all have changed after an agent write. */
+export function refreshAfterAgent(qc: QueryClient) {
+  for (const key of [["tasks"], ["agenda"], ["task"], qk.projects, qk.areas, qk.labels]) {
+    qc.invalidateQueries({ queryKey: key });
+  }
+}
+
+export function usePendingActions() {
+  const qc = useQueryClient();
+  const done = (p: PendingChange) => {
+    rememberPending(qc, p);
+    refreshAfterAgent(qc);
+  };
+  return {
+    apply: useMutation({
+      mutationFn: ({ id, input }: { id: string; input?: Record<string, unknown> }) =>
+        api.applyPending(id, input),
+      onError: errorToast,
+      onSuccess: done,
+    }),
+    dismiss: useMutation({
+      mutationFn: (id: string) => api.dismissPending(id),
+      onError: errorToast,
+      onSuccess: done,
     }),
   };
 }

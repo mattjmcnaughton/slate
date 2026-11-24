@@ -5,9 +5,11 @@ import { PageHeader, usePageContext } from "../components/TaskList";
 import type { ApiKeyCreated, ApiKeyKind } from "../lib/api";
 import { formatShort } from "../lib/dates";
 import {
+  useAgentSettings,
   useApiKeyMutations,
   useApiKeys,
   useMe,
+  usePatchAgentSettings,
   usePatchSettings,
   useSettings,
 } from "../lib/queries";
@@ -98,6 +100,12 @@ function Settings() {
           </div>
         </Row>
         <Row
+          label="Assistant"
+          hint="The sidebar assistant (Ctrl/Cmd J) and MCP clients read and change your tasks."
+        >
+          <AgentSettingsForm />
+        </Row>
+        <Row
           label="API keys"
           hint="For agents and scripts: send Authorization: Bearer <key>. Keys act as you, in your workspace."
         >
@@ -116,6 +124,66 @@ function Settings() {
           </button>
         </Row>
       </div>
+    </div>
+  );
+}
+
+function AgentSettingsForm() {
+  const s = useAgentSettings().data;
+  const patch = usePatchAgentSettings();
+  const [md, setMd] = useState<string | null>(null);
+  if (!s) return null;
+  return (
+    <div className="flex flex-col gap-3 text-[13px]">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={s.enabled}
+          onChange={(e) => patch.mutate({ enabled: e.target.checked })}
+        />
+        Turn on the sidebar assistant
+      </label>
+      <div className="text-[12px] text-ink3">
+        Model: {s.provider}. Up to {s.daily_message_cap} messages a day. Images are never stored.
+      </div>
+      <div
+        className="inline-flex w-fit rounded-md border border-line p-0.5"
+        role="group"
+        aria-label="Agent mode"
+      >
+        {(["suggest", "apply"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={s.mode === m}
+            onClick={() => patch.mutate({ mode: m })}
+            className={`h-7 rounded px-3 text-[12.5px] ${
+              s.mode === m ? "bg-hover text-ink" : "text-ink3 hover:text-ink"
+            }`}
+          >
+            {m === "suggest" ? "Suggest" : "Apply"}
+          </button>
+        ))}
+      </div>
+      <div className="text-[12px] text-ink3">
+        {s.mode === "suggest"
+          ? "Agent changes wait as Pending changes until you apply them."
+          : "Agent changes happen at once. Deletes still wait for you."}
+      </div>
+      <label className="flex flex-col gap-1">
+        <span className="text-[12.5px] text-ink2">AGENT.md: standing instructions</span>
+        <textarea
+          aria-label="AGENT.md"
+          rows={4}
+          value={md ?? s.instructions}
+          placeholder="Such as: File errands under Home. Keep titles short."
+          onChange={(e) => setMd(e.target.value)}
+          onBlur={() => {
+            if (md !== null && md !== s.instructions) patch.mutate({ instructions: md });
+          }}
+          className="rounded-md border border-line2 bg-panel p-2 text-[13px] outline-none focus:border-accent"
+        />
+      </label>
     </div>
   );
 }
@@ -163,7 +231,7 @@ function ApiKeys() {
           className={inputCls}
         >
           <option value="rest">REST API</option>
-          <option value="mcp">MCP (reserved)</option>
+          <option value="mcp">MCP (AI clients at /mcp)</option>
         </select>
         <button
           type="submit"
@@ -181,6 +249,18 @@ function ApiKeys() {
           <code data-testid="new-key" className="block break-all font-mono text-[12px]">
             {fresh.secret}
           </code>
+          {fresh.kind === "mcp" && (
+            <div className="mt-2 text-ink2">
+              <div className="mb-1">Add it to an MCP client, for example Claude Code:</div>
+              <code className="block break-all rounded bg-panel p-2 font-mono text-[11.5px]">
+                claude mcp add --transport http slate {window.location.origin}/mcp --header
+                "Authorization: Bearer {fresh.secret}"
+              </code>
+              <div className="mt-1 text-ink3">
+                MCP keys work only at /mcp. Your Agent mode decides whether their writes apply.
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setFresh(null)}

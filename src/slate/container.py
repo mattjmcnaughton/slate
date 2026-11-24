@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from itsdangerous import URLSafeTimedSerializer
 
@@ -39,6 +39,10 @@ class Container:
     allowed_user_ids: frozenset[str] = frozenset()
     allowed_emails: frozenset[str] = frozenset()
     secure_cookies: bool = True
+    # The sidebar assistant (agents/model.py): "stub", an OpenRouter id, or "" (off).
+    agent_model: str = ""
+    openrouter_api_key: str = field(default="", repr=False)
+    agent_daily_message_cap: int = 200
     # Where the provider sends the browser after sign-out; must be one of its
     # Allowed Logout URLs. "" means this request's own base URL.
     public_url: str = ""
@@ -84,6 +88,11 @@ def build_container(settings: Settings) -> Container:
         shutdown.append(engine.dispose)
 
     secure = not settings.redirect_uri.startswith("http://")
+    agent: dict[str, Any] = {
+        "agent_model": settings.agent_model,
+        "openrouter_api_key": settings.openrouter_api_key,
+        "agent_daily_message_cap": settings.agent_daily_message_cap,
+    }
     if settings.slate_auth == "dev":
         from slate.seed import provision_dev_user, seed_if_empty
 
@@ -97,6 +106,8 @@ def build_container(settings: Settings) -> Container:
             startup=startup,
             shutdown=shutdown,
             secure_cookies=False,
+            public_url=settings.public_url,
+            **agent,
         )
 
     # Without a session secret nothing can be signed; a random one keeps the app
@@ -125,4 +136,5 @@ def build_container(settings: Settings) -> Container:
         public_url=settings.public_url,
         startup=startup,
         shutdown=shutdown,
+        **agent,
     )

@@ -90,3 +90,13 @@ docker build -t slate .
 # Run container
 docker run -p 8000:8000 slate
 ```
+
+## Assistant and MCP
+
+The sidebar assistant uses `AGENT_MODEL` (default `openai/gpt-6-luna`) through
+OpenRouter and needs `OPENROUTER_API_KEY`. Without a key, run
+`AGENT_MODEL=stub just dev-be` for a deterministic model that never leaves the
+process (refused on a public HTTPS origin). Turn the assistant on in Settings.
+MCP is at `http://localhost:8000/mcp` with an MCP key; see
+[technical/mcp-clients.md](technical/mcp-clients.md). After changing routes, run
+`uv run python scripts/api_docs.py` to regenerate `docs/api.md`.

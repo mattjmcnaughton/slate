@@ -174,9 +174,61 @@ class Activity:
     created_at: datetime | None = None
 
 
+class AgentMode(StrEnum):
+    SUGGEST = "suggest"  # agent writes become Pending changes
+    APPLY = "apply"  # agent writes run now (deletes still pend)
+
+
 @dataclass
 class Settings:
     timezone: str = "America/New_York"
+    # The sidebar assistant; MCP clients follow agent_mode too.
+    agent_enabled: bool = False
+    agent_mode: AgentMode = AgentMode.SUGGEST
+    agent_instructions: str = ""  # AGENT.md
+
+
+class PendingStatus(StrEnum):
+    PENDING = "pending"
+    APPLIED = "applied"
+    DISMISSED = "dismissed"
+    FAILED = "failed"
+
+
+@dataclass
+class PendingChange:
+    """A validated write drafted by an agent, waiting for the owner to apply it.
+
+    ``tool`` and ``input`` are a catalog write tool and its arguments; applying
+    re-validates and runs them. ``origin`` is ``agent`` (the sidebar) or ``mcp``.
+    """
+
+    tool: str
+    input: dict[str, Any]
+    summary: str
+    origin: str
+    created_by: UUID
+    status: PendingStatus = PendingStatus.PENDING
+    error: str | None = None
+    result: dict[str, Any] | None = None
+    workspace_id: UUID | None = None
+    id: UUID = field(default_factory=new_id)
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+
+
+@dataclass
+class AgentMessage:
+    """One message of a user's sidebar conversation. Images are never stored."""
+
+    user_id: UUID
+    role: str  # owner | agent
+    content: str
+    image_count: int = 0
+    pending_change_ids: list[str] = field(default_factory=list)
+    workspace_id: UUID | None = None
+    id: UUID = field(default_factory=new_id)
+    created_at: datetime | None = None
 
 
 @dataclass
@@ -200,13 +252,16 @@ class Workspace:
     name: str = "Personal"
     timezone: str = "America/New_York"
     next_task_number: int = 1
+    agent_enabled: bool = False
+    agent_mode: str = "suggest"
+    agent_instructions: str = ""
     id: UUID = field(default_factory=new_id)
     created_at: datetime | None = None
 
 
 class ApiKeyKind(StrEnum):
     REST = "rest"  # the /api routes
-    MCP = "mcp"  # reserved for a future /mcp endpoint; refused by /api
+    MCP = "mcp"  # only the /mcp endpoint; refused by /api
 
 
 @dataclass

@@ -7,6 +7,7 @@ filters on the unit of work's ``workspace_id``.
 
 from __future__ import annotations
 
+import builtins
 from typing import TYPE_CHECKING, Any, Self
 
 from sqlalchemy import case, delete, func, or_, select, update
@@ -16,11 +17,15 @@ from slate.domain import (
     CLOSED_STATUSES,
     Account,
     Activity,
+    AgentMessage,
+    AgentMode,
     ApiKey,
     ApiKeyKind,
     Area,
     Comment,
     Label,
+    PendingChange,
+    PendingStatus,
     Project,
     ProjectStatus,
     Settings,
@@ -30,10 +35,12 @@ from slate.domain import (
 )
 from slate.models import (
     ActivityRow,
+    AgentMessageRow,
     ApiKeyRow,
     AreaRow,
     CommentRow,
     LabelRow,
+    PendingChangeRow,
     ProjectRow,
     TaskLabelRow,
     TaskRow,
@@ -502,15 +509,142 @@ class SqlActivityRepository(_Owned):
 class SqlSettingsRepository(_Owned):
     async def get(self) -> Settings:
         row = await self.s.get(WorkspaceRow, self.ws)
-        return Settings(timezone=row.timezone) if row else Settings()
+        if row is None:
+            return Settings()
+        return Settings(
+            timezone=row.timezone,
+            agent_enabled=bool(row.agent_enabled),
+            agent_mode=AgentMode(row.agent_mode or "suggest"),
+            agent_instructions=row.agent_instructions or "",
+        )
 
     async def save(self, settings: Settings) -> Settings:
         row = await self.s.get(WorkspaceRow, self.ws)
         if row is None:
             raise NotFoundError(f"workspace {self.ws}")
         row.timezone = settings.timezone
+        row.agent_enabled = settings.agent_enabled
+        row.agent_mode = str(settings.agent_mode)
+        row.agent_instructions = settings.agent_instructions
         await self.s.flush()
         return settings
+
+
+class SqlPendingChangeRepository(_Owned):
+    @staticmethod
+    def _entity(r: PendingChangeRow) -> PendingChange:
+        return PendingChange(
+            id=r.id,
+            workspace_id=r.workspace_id,
+            tool=r.tool,
+            input=r.input,
+            summary=r.summary,
+            origin=r.origin,
+            created_by=r.created_by,
+            status=PendingStatus(r.status),
+            error=r.error,
+            result=r.result,
+            created_at=r.created_at,
+            resolved_at=r.resolved_at,
+        )
+
+    async def add(self, change: PendingChange) -> PendingChange:
+        row = PendingChangeRow(
+            id=change.id,
+            workspace_id=self.ws,
+            tool=change.tool,
+            input=change.input,
+            summary=change.summary,
+            origin=change.origin,
+            created_by=change.created_by,
+            status=str(change.status),
+            error=change.error,
+            result=change.result,
+            created_at=change.created_at or self.clock.now(),
+            resolved_at=change.resolved_at,
+        )
+        self.s.add(row)
+        await self.s.flush()
+        return self._entity(row)
+
+    async def get(self, id: UUID) -> PendingChange | None:
+        q = select(PendingChangeRow).where(
+            PendingChangeRow.id == id, PendingChangeRow.workspace_id == self.ws
+        )
+        row = (await self.s.execute(q)).scalar_one_or_none()
+        return self._entity(row) if row else None
+
+    async def list(self, status: PendingStatus | None = None) -> builtins.list[PendingChange]:
+        q = select(PendingChangeRow).where(PendingChangeRow.workspace_id == self.ws)
+        if status is not None:
+            q = q.where(PendingChangeRow.status == str(status))
+        q = q.order_by(PendingChangeRow.created_at, PendingChangeRow.id)
+        return [self._entity(r) for r in (await self.s.execute(q)).scalars()]
+
+    async def resolve(self, change: PendingChange) -> bool:
+        """Move a pending change to its final status; False if it was no longer pending."""
+        q = (
+            update(PendingChangeRow)
+            .where(
+                PendingChangeRow.id == change.id,
+                PendingChangeRow.workspace_id == self.ws,
+                PendingChangeRow.status == str(PendingStatus.PENDING),
+            )
+            .values(
+                status=str(change.status),
+                error=change.error,
+                result=change.result,
+                input=change.input,
+                resolved_at=self.clock.now(),
+            )
+        )
+        res = await self.s.execute(q)
+        return bool(getattr(res, "rowcount", 0))
+
+
+class SqlAgentMessageRepository(_Owned):
+    @staticmethod
+    def _entity(r: AgentMessageRow) -> AgentMessage:
+        return AgentMessage(
+            id=r.id,
+            workspace_id=r.workspace_id,
+            user_id=r.user_id,
+            role=r.role,
+            content=r.content,
+            image_count=r.image_count,
+            pending_change_ids=list(r.pending_change_ids or []),
+            created_at=r.created_at,
+        )
+
+    async def add(self, m: AgentMessage) -> AgentMessage:
+        row = AgentMessageRow(
+            id=m.id,
+            workspace_id=self.ws,
+            user_id=m.user_id,
+            role=m.role,
+            content=m.content,
+            image_count=m.image_count,
+            pending_change_ids=list(m.pending_change_ids),
+            created_at=m.created_at or self.clock.now(),
+        )
+        self.s.add(row)
+        await self.s.flush()
+        return self._entity(row)
+
+    async def list_for_user(self, user_id: UUID) -> list[AgentMessage]:
+        q = (
+            select(AgentMessageRow)
+            .where(AgentMessageRow.workspace_id == self.ws, AgentMessageRow.user_id == user_id)
+            .order_by(AgentMessageRow.created_at, AgentMessageRow.id)
+        )
+        return [self._entity(r) for r in (await self.s.execute(q)).scalars()]
+
+    async def clear(self, user_id: UUID) -> None:
+        await self.s.execute(
+            delete(AgentMessageRow).where(
+                AgentMessageRow.workspace_id == self.ws, AgentMessageRow.user_id == user_id
+            )
+        )
 
 
 # --- accounts -----------------------------------------------------------------
@@ -667,6 +801,8 @@ class SqlUnitOfWork:
         self.comments = SqlCommentRepository(s, c, ws)
         self.activity = SqlActivityRepository(s, c, ws)
         self.settings = SqlSettingsRepository(s, c, ws)
+        self.pending_changes = SqlPendingChangeRepository(s, c, ws)
+        self.agent_messages = SqlAgentMessageRepository(s, c, ws)
         return self
 
     async def __aexit__(self, *exc: object) -> None:

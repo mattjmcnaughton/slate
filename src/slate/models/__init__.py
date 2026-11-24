@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Date,
     DateTime,
     ForeignKey,
@@ -96,6 +97,9 @@ class WorkspaceRow(Base):
     name: Mapped[str] = mapped_column(String(200))
     timezone: Mapped[str] = mapped_column(String(64))
     next_task_number: Mapped[int] = mapped_column(Integer, default=1)
+    agent_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    agent_mode: Mapped[str] = mapped_column(String(16), default="suggest")
+    agent_instructions: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(TS)
 
 
@@ -224,4 +228,37 @@ class ActivityRow(Base):
     task_id: Mapped[UUID] = mapped_column(Uuid)
     kind: Mapped[str] = mapped_column(String(32))
     data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TS)
+
+
+class PendingChangeRow(Base):
+    __tablename__ = "pending_changes"
+    __table_args__ = (
+        UniqueConstraint("id", "workspace_id", name="uq_pending_changes_id_workspace"),
+        Index("ix_pending_changes_status", "workspace_id", "status"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    tool: Mapped[str] = mapped_column(String(64))
+    input: Mapped[dict[str, Any]] = mapped_column(JSON)
+    summary: Mapped[str] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(16))
+    error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(TS)
+    resolved_at: Mapped[datetime | None] = mapped_column(TS)
+
+
+class AgentMessageRow(Base):
+    __tablename__ = "agent_messages"
+    __table_args__ = (Index("ix_agent_messages_user", "workspace_id", "user_id", "created_at"),)
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    image_count: Mapped[int] = mapped_column(Integer, default=0)
+    pending_change_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(TS)

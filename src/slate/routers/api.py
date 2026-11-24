@@ -60,7 +60,12 @@ from slate.services.importer import (
 )
 from slate.services.tasks import TaskService, ValidationError
 
-router = APIRouter(prefix="/api", tags=["api"])
+ERRORS: dict[int | str, dict] = {
+    401: {"description": "Not signed in, or the API key is invalid or revoked"},
+    403: {"description": "An MCP key, or an API key on a browser-session-only route"},
+}
+
+router = APIRouter(prefix="/api", responses=ERRORS)
 
 
 # --- presenters ------------------------------------------------------------------
@@ -118,7 +123,7 @@ async def _not_found(fn, *a, **kw) -> Any:  # noqa: ANN001
 # --- me and settings ---------------------------------------------------------------
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut, tags=["account"])
 async def me(user: UserDep) -> UserOut:
     return UserOut(
         id=user.id,
@@ -129,12 +134,12 @@ async def me(user: UserDep) -> UserOut:
     )
 
 
-@router.get("/settings", response_model=SettingsOut)
+@router.get("/settings", response_model=SettingsOut, tags=["account"])
 async def get_settings(svc: ServiceDep) -> SettingsOut:
     return SettingsOut(timezone=(await svc.uow.settings.get()).timezone)
 
 
-@router.patch("/settings", response_model=SettingsOut)
+@router.patch("/settings", response_model=SettingsOut, tags=["account"])
 async def patch_settings(body: SettingsPatch, svc: ServiceDep, _: BrowserUserDep) -> SettingsOut:
     try:
         ZoneInfo(body.timezone)
@@ -149,18 +154,23 @@ async def patch_settings(body: SettingsPatch, svc: ServiceDep, _: BrowserUserDep
 # --- API keys (browser session only) ---------------------------------------------------
 
 
-@router.get("/api-keys", response_model=list[ApiKeyOut])
+@router.get("/api-keys", response_model=list[ApiKeyOut], tags=["api keys"])
 async def list_api_keys(svc: ServiceDep, user: BrowserUserDep) -> list:
     return await svc.uow.api_keys.list_for_user(user.id)
 
 
-@router.post("/api-keys", response_model=ApiKeyCreated, status_code=201)
+@router.post("/api-keys", response_model=ApiKeyCreated, status_code=201, tags=["api keys"])
 async def create_api_key(body: ApiKeyIn, svc: ServiceDep, user: BrowserUserDep) -> ApiKeyCreated:
     issued = await issue_key(svc.uow, user.id, user.workspace_id, body.name, body.kind)
     return ApiKeyCreated(**asdict(issued.key), secret=issued.secret)
 
 
-@router.delete("/api-keys/{key_id}", status_code=204)
+@router.delete(
+    "/api-keys/{key_id}",
+    status_code=204,
+    tags=["api keys"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def revoke_api_key(
     key_id: UUID, svc: ServiceDep, user: BrowserUserDep, container: ContainerDep
 ) -> Response:
@@ -172,17 +182,22 @@ async def revoke_api_key(
 # --- areas ---------------------------------------------------------------------------
 
 
-@router.get("/areas", response_model=list[AreaOut])
+@router.get("/areas", response_model=list[AreaOut], tags=["areas"])
 async def list_areas(svc: ServiceDep) -> list[Area]:
     return await svc.uow.areas.list()
 
 
-@router.post("/areas", response_model=AreaOut, status_code=201)
+@router.post("/areas", response_model=AreaOut, status_code=201, tags=["areas"])
 async def create_area(body: AreaIn, svc: ServiceDep) -> Area:
     return await svc.uow.areas.add(Area(**body.model_dump()))
 
 
-@router.patch("/areas/{area_id}", response_model=AreaOut)
+@router.patch(
+    "/areas/{area_id}",
+    response_model=AreaOut,
+    tags=["areas"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def patch_area(area_id: UUID, body: AreaPatch, svc: ServiceDep) -> Area:
     area = await svc.uow.areas.get(area_id)
     if area is None:
@@ -193,7 +208,12 @@ async def patch_area(area_id: UUID, body: AreaPatch, svc: ServiceDep) -> Area:
     return await svc.uow.areas.update(area)
 
 
-@router.delete("/areas/{area_id}", status_code=204)
+@router.delete(
+    "/areas/{area_id}",
+    status_code=204,
+    tags=["areas"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def delete_area(area_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.areas.delete, area_id)
     return Response(status_code=204)
@@ -220,12 +240,12 @@ async def _present_projects(svc: TaskService, projects: list[Project]) -> list[P
     ]
 
 
-@router.get("/projects", response_model=list[ProjectOut])
+@router.get("/projects", response_model=list[ProjectOut], tags=["projects"])
 async def list_projects(svc: ServiceDep, area_id: UUID | None = None) -> list[ProjectOut]:
     return await _present_projects(svc, await svc.uow.projects.list(area_id))
 
 
-@router.post("/projects", response_model=ProjectOut, status_code=201)
+@router.post("/projects", response_model=ProjectOut, status_code=201, tags=["projects"])
 async def create_project(body: ProjectIn, svc: ServiceDep) -> ProjectOut:
     if body.area_id is not None and await svc.uow.areas.get(body.area_id) is None:
         raise HTTPException(422, "Unknown area")
@@ -233,7 +253,12 @@ async def create_project(body: ProjectIn, svc: ServiceDep) -> ProjectOut:
     return (await _present_projects(svc, [p]))[0]
 
 
-@router.get("/projects/{project_id}", response_model=ProjectOut)
+@router.get(
+    "/projects/{project_id}",
+    response_model=ProjectOut,
+    tags=["projects"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def get_project(project_id: UUID, svc: ServiceDep) -> ProjectOut:
     p = await svc.uow.projects.get(project_id)
     if p is None:
@@ -241,7 +266,12 @@ async def get_project(project_id: UUID, svc: ServiceDep) -> ProjectOut:
     return (await _present_projects(svc, [p]))[0]
 
 
-@router.patch("/projects/{project_id}", response_model=ProjectOut)
+@router.patch(
+    "/projects/{project_id}",
+    response_model=ProjectOut,
+    tags=["projects"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def patch_project(project_id: UUID, body: ProjectPatch, svc: ServiceDep) -> ProjectOut:
     p = await svc.uow.projects.get(project_id)
     if p is None:
@@ -257,7 +287,12 @@ async def patch_project(project_id: UUID, body: ProjectPatch, svc: ServiceDep) -
     return (await _present_projects(svc, [p]))[0]
 
 
-@router.delete("/projects/{project_id}", status_code=204)
+@router.delete(
+    "/projects/{project_id}",
+    status_code=204,
+    tags=["projects"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def delete_project(project_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.projects.delete, project_id)
     return Response(status_code=204)
@@ -266,17 +301,22 @@ async def delete_project(project_id: UUID, svc: ServiceDep) -> Response:
 # --- labels -----------------------------------------------------------------------------
 
 
-@router.get("/labels", response_model=list[LabelOut])
+@router.get("/labels", response_model=list[LabelOut], tags=["labels"])
 async def list_labels(svc: ServiceDep) -> list[Label]:
     return await svc.uow.labels.list()
 
 
-@router.post("/labels", response_model=LabelOut, status_code=201)
+@router.post("/labels", response_model=LabelOut, status_code=201, tags=["labels"])
 async def create_label(body: LabelIn, svc: ServiceDep) -> Label:
     return await svc.uow.labels.add(Label(**body.model_dump()))
 
 
-@router.patch("/labels/{label_id}", response_model=LabelOut)
+@router.patch(
+    "/labels/{label_id}",
+    response_model=LabelOut,
+    tags=["labels"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def patch_label(label_id: UUID, body: LabelPatch, svc: ServiceDep) -> Label:
     lb = await svc.uow.labels.get(label_id)
     if lb is None:
@@ -287,7 +327,12 @@ async def patch_label(label_id: UUID, body: LabelPatch, svc: ServiceDep) -> Labe
     return await svc.uow.labels.update(lb)
 
 
-@router.delete("/labels/{label_id}", status_code=204)
+@router.delete(
+    "/labels/{label_id}",
+    status_code=204,
+    tags=["labels"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def delete_label(label_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.labels.delete, label_id)
     return Response(status_code=204)
@@ -296,7 +341,7 @@ async def delete_label(label_id: UUID, svc: ServiceDep) -> Response:
 # --- tasks --------------------------------------------------------------------------------
 
 
-@router.get("/tasks", response_model=list[TaskOut])
+@router.get("/tasks", response_model=list[TaskOut], tags=["tasks"])
 async def list_tasks(
     svc: ServiceDep,
     project_id: UUID | None = None,
@@ -353,7 +398,7 @@ async def _apply_due_string(svc: TaskService, text: str) -> dict[str, Any]:
     return {"due_date": parsed.due.date, "due_time": parsed.due.time}
 
 
-@router.post("/tasks", response_model=TaskOut, status_code=201)
+@router.post("/tasks", response_model=TaskOut, status_code=201, tags=["tasks"])
 async def create_task(body: TaskIn, svc: ServiceDep) -> TaskOut:
     data = body.model_dump(exclude={"due_string"})
     if body.due_string:
@@ -362,7 +407,7 @@ async def create_task(body: TaskIn, svc: ServiceDep) -> TaskOut:
     return await present_task(svc, task)
 
 
-@router.post("/tasks/quick-add", response_model=TaskOut, status_code=201)
+@router.post("/tasks/quick-add", response_model=TaskOut, status_code=201, tags=["tasks"])
 async def quick_add(body: QuickAddIn, svc: ServiceDep) -> TaskOut:
     r = await svc.parse(body.text)
     if not r.title:
@@ -391,12 +436,22 @@ async def quick_add(body: QuickAddIn, svc: ServiceDep) -> TaskOut:
     return await present_task(svc, await _not_found(svc.create, task))
 
 
-@router.get("/tasks/{ref}", response_model=TaskOut)
+@router.get(
+    "/tasks/{ref}",
+    response_model=TaskOut,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def get_task(ref: str, svc: ServiceDep) -> TaskOut:
     return await present_task(svc, await _not_found(svc.get, ref))
 
 
-@router.patch("/tasks/{ref}", response_model=TaskOut)
+@router.patch(
+    "/tasks/{ref}",
+    response_model=TaskOut,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def patch_task(ref: str, body: TaskPatch, svc: ServiceDep) -> TaskOut:
     sent = body.model_fields_set - {"due_string", "clear_recurrence"}
     nullable = {"project_id", "area_id", "parent_id", "due_date", "due_time"}
@@ -419,36 +474,67 @@ async def patch_task(ref: str, body: TaskPatch, svc: ServiceDep) -> TaskOut:
     return await present_task(svc, await _not_found(svc.update, ref, changes))
 
 
-@router.delete("/tasks/{ref}", status_code=204)
+@router.delete(
+    "/tasks/{ref}",
+    status_code=204,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def delete_task(ref: str, svc: ServiceDep) -> Response:
     await _not_found(svc.delete, ref)
     return Response(status_code=204)
 
 
-@router.post("/tasks/{ref}/complete", response_model=CompleteOut)
+@router.post(
+    "/tasks/{ref}/complete",
+    response_model=CompleteOut,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def complete_task(ref: str, svc: ServiceDep) -> CompleteOut:
     task = await _not_found(svc.complete, ref)
     open_subs = await svc.open_subtasks(task.id)
     return CompleteOut(task=await present_task(svc, task), open_subtasks=open_subs)
 
 
-@router.post("/tasks/{ref}/reopen", response_model=TaskOut)
+@router.post(
+    "/tasks/{ref}/reopen",
+    response_model=TaskOut,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def reopen_task(ref: str, svc: ServiceDep) -> TaskOut:
     return await present_task(svc, await _not_found(svc.reopen, ref))
 
 
-@router.get("/tasks/{ref}/comments", response_model=list[CommentOut])
+@router.get(
+    "/tasks/{ref}/comments",
+    response_model=list[CommentOut],
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def list_comments(ref: str, svc: ServiceDep) -> list:
     task = await _not_found(svc.get, ref)
     return await svc.uow.comments.list_for_task(task.id)
 
 
-@router.post("/tasks/{ref}/comments", response_model=CommentOut, status_code=201)
+@router.post(
+    "/tasks/{ref}/comments",
+    response_model=CommentOut,
+    status_code=201,
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def add_comment(ref: str, body: CommentIn, svc: ServiceDep):  # noqa: ANN201
     return await _not_found(svc.add_comment, ref, body.body)
 
 
-@router.patch("/comments/{comment_id}", response_model=CommentOut)
+@router.patch(
+    "/comments/{comment_id}",
+    response_model=CommentOut,
+    tags=["comments"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def patch_comment(comment_id: UUID, body: CommentIn, svc: ServiceDep):  # noqa: ANN201
     c = await svc.uow.comments.get(comment_id)
     if c is None:
@@ -457,13 +543,23 @@ async def patch_comment(comment_id: UUID, body: CommentIn, svc: ServiceDep):  # 
     return await svc.uow.comments.update(c)
 
 
-@router.delete("/comments/{comment_id}", status_code=204)
+@router.delete(
+    "/comments/{comment_id}",
+    status_code=204,
+    tags=["comments"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def delete_comment(comment_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.comments.delete, comment_id)
     return Response(status_code=204)
 
 
-@router.get("/tasks/{ref}/activity", response_model=list[ActivityOut])
+@router.get(
+    "/tasks/{ref}/activity",
+    response_model=list[ActivityOut],
+    tags=["tasks"],
+    responses={404: {"description": "Not found in your workspace"}},
+)
 async def list_activity(ref: str, svc: ServiceDep) -> list:
     task = await _not_found(svc.get, ref)
     return await svc.uow.activity.list_for_task(task.id)
@@ -472,7 +568,7 @@ async def list_activity(ref: str, svc: ServiceDep) -> list:
 # --- agenda and parsing ----------------------------------------------------------------
 
 
-@router.get("/agenda", response_model=AgendaOut)
+@router.get("/agenda", response_model=AgendaOut, tags=["agenda"])
 async def agenda(
     svc: ServiceDep,
     start: date | None = None,
@@ -498,7 +594,7 @@ async def agenda(
     )
 
 
-@router.post("/parse", response_model=ParseOut)
+@router.post("/parse", response_model=ParseOut, tags=["tasks"])
 async def parse(body: ParseIn, svc: ServiceDep) -> ParseOut:
     r = await svc.parse(body.text)
     return ParseOut(
@@ -525,7 +621,7 @@ async def parse(body: ParseIn, svc: ServiceDep) -> ParseOut:
 # --- import ---------------------------------------------------------------------------------
 
 
-@router.post("/import", response_model=ImportOut)
+@router.post("/import", response_model=ImportOut, tags=["import"])
 async def import_batch(body: ImportIn, svc: ServiceDep) -> ImportOut:
     """Idempotent bulk upsert keyed by (source, source_id) within your workspace. Safe to re-run."""
     batch = ImportBatch(

@@ -66,6 +66,10 @@ interface UIState {
   shortcuts: boolean;
   setShortcuts: (open: boolean) => void;
 
+  /** The assistant panel (Ctrl/Cmd J). */
+  assistant: boolean;
+  setAssistant: (open: boolean) => void;
+
   page: PageContext;
   setPage: (p: PageContext) => void;
 
@@ -129,6 +133,9 @@ export const useUI = create<UIState>((set, get) => ({
 
   shortcuts: false,
   setShortcuts: (shortcuts) => set({ shortcuts }),
+
+  assistant: false,
+  setAssistant: (assistant) => set({ assistant }),
 
   page: {},
   setPage: (page) => set({ page }),

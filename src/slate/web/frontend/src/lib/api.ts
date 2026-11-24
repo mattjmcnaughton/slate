@@ -252,6 +252,41 @@ export interface ApiKeyCreated extends ApiKey {
   secret: string;
 }
 
+export type AgentMode = "suggest" | "apply";
+
+export interface AgentSettings {
+  enabled: boolean;
+  mode: AgentMode;
+  instructions: string;
+  provider: string;
+  daily_message_cap: number;
+}
+
+export type PendingStatus = "pending" | "applied" | "dismissed" | "failed";
+
+/** A write drafted by the assistant or an MCP client, waiting to be applied. */
+export interface PendingChange {
+  id: string;
+  tool: string;
+  origin: "agent" | "mcp";
+  status: PendingStatus;
+  summary: string;
+  input: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface AgentMessage {
+  id: string;
+  role: "owner" | "agent";
+  content: string;
+  image_count: number;
+  pending_change_ids: string[];
+  created_at: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -364,6 +399,17 @@ export const api = {
   createApiKey: (body: { name: string; kind?: ApiKeyKind }) =>
     post<ApiKeyCreated>("/api/api-keys", body),
   revokeApiKey: (id: string) => del(`/api/api-keys/${id}`),
+
+  agentSettings: () => get<AgentSettings>("/api/agent/settings"),
+  patchAgentSettings: (body: Partial<Pick<AgentSettings, "enabled" | "mode" | "instructions">>) =>
+    patch<AgentSettings>("/api/agent/settings", body),
+  conversation: () => get<AgentMessage[]>("/api/agent/conversation"),
+  clearConversation: () => del("/api/agent/conversation"),
+  pendingChanges: (status: PendingStatus | "all" = "pending") =>
+    get<PendingChange[]>(`/api/pending-changes${queryString({ status })}`),
+  applyPending: (id: string, input?: Record<string, unknown>) =>
+    post<PendingChange>(`/api/pending-changes/${id}/apply`, input ? { input } : {}),
+  dismissPending: (id: string) => post<PendingChange>(`/api/pending-changes/${id}/dismiss`),
 
   agenda: (start?: string, end?: string) =>
     get<Agenda>(`/api/agenda${queryString({ start, end })}`),

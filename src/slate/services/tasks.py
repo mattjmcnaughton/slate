@@ -85,6 +85,8 @@ class TaskService:
     def __init__(self, uow: UnitOfWork, clock: Clock) -> None:
         self.uow = uow
         self.clock = clock
+        # Who made the change when an agent did (agent | mcp); logged on activity.
+        self.via: str | None = None
 
     # --- time ---------------------------------------------------------------
 
@@ -158,9 +160,10 @@ class TaskService:
                 raise ValidationError("Subtasks cannot repeat")
 
     async def _log(self, task_id: UUID, kind: str, data: dict | None = None, at=None) -> None:
-        await self.uow.activity.add(
-            Activity(task_id=task_id, kind=kind, data=data or {}, created_at=at)
-        )
+        data = dict(data or {})
+        if self.via:
+            data["via"] = self.via
+        await self.uow.activity.add(Activity(task_id=task_id, kind=kind, data=data, created_at=at))
 
     async def create(self, task: Task, *, log_kind: str = "created") -> Task:
         if task.recurrence is not None and task.due_date is None:

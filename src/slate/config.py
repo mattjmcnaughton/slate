@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     amp_deployment_url: str = ""
     app_session_secret: str = ""
 
+    # The sidebar assistant: an OpenRouter model id (zero-data-retention routing
+    # only), or "stub" for the deterministic test model. Empty turns it off.
+    agent_model: str = "openai/gpt-6-luna"
+    openrouter_api_key: str = ""
+    agent_daily_message_cap: int = 200
+
     @property
     def allowed_user_ids(self) -> frozenset[str]:
         return frozenset(u.strip() for u in self.slate_allowed_user_ids.split(",") if u.strip())

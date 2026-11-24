@@ -145,9 +145,13 @@ workspace, and every reference between owned rows is a composite foreign key on
 API keys (`api_keys`) belong to a user and act in that user's workspace. Only the
 SHA-256 digest is stored; the key is shown once. Each request re-checks the key,
 so revoking is immediate. A key's `kind` is `rest` (works on `/api`) or `mcp`
-(reserved for a future `/mcp` endpoint, refused by `/api`), so an agent given an
-MCP key cannot drop to REST around MCP-only rules. Keys cannot manage keys or
-change settings.
+(works only on `/mcp`, refused by `/api`), so an agent given an MCP key cannot drop
+to REST around the Agent mode. Keys cannot manage keys or change settings.
+
+## Agent access
+
+The sidebar assistant and MCP clients share one tool catalog; see
+[TDD 01](../tdds/01-agent-access.md) and [MCP client setup](mcp-clients.md).
 
 ## Deployment
 
@@ -162,7 +166,7 @@ because Boxes do not guarantee a Python runtime. `.box/run.sh` sets
 | Database | Neon project `slate` (`dark-meadow-34017316`), database `slate`, role `slate_owner`. The app runs migrations at startup. |
 | Sign-in | Auth0 application `slate`, callbacks `https://slate.mattjmcnaughton.com/auth/callback` and `https://slate--mattjmcnaughton.onamp.dev/auth/callback`. |
 | Plain env (`.amp/box.yaml`) | `SLATE_AUTH=oidc`, `OIDC_ISSUER` (exactly as discovery reports it, with the trailing `/`), `SLATE_PUBLIC_URL`. |
-| Secrets | `DATABASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_SESSION_SECRET` (32+ chars), `SLATE_ALLOWED_USER_IDS` and `SLATE_ALLOWED_EMAILS` (comma-separated). Stored as `KEY='value'` lines in `secrets.env` in the deployment's data directory (copied with `amp boxes cp`, mode 600), which `.box/run.sh` loads; Amp deployment secrets work too. |
+| Secrets | `OPENROUTER_API_KEY` (the assistant; key `box-slate`), `DATABASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_SESSION_SECRET` (32+ chars), `SLATE_ALLOWED_USER_IDS` and `SLATE_ALLOWED_EMAILS` (comma-separated). Stored as `KEY='value'` lines in `secrets.env` in the deployment's data directory (copied with `amp boxes cp`, mode 600), which `.box/run.sh` loads; Amp deployment secrets work too. |
 
 Deploy pushed code with `amp boxes deploy --domain slate.mattjmcnaughton.com`.
 Check it with `curl -s https://slate.mattjmcnaughton.com/readyz` and confirm

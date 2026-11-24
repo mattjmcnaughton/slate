@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from slate.auth import User, bearer
 from slate.container import Container
@@ -22,7 +23,20 @@ def get_container(request: Request) -> Container:
 ContainerDep = Annotated[Container, Depends(get_container)]
 
 
-async def get_user(request: Request, container: ContainerDep) -> User:
+# Declares the scheme in OpenAPI (the Authorize button in /docs); the key itself is
+# read and checked below, so a missing header falls through to the session cookie.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    scheme_name="apiKey",
+    description="A REST API key from Settings → API keys. MCP keys are refused here.",
+)
+
+
+async def get_user(
+    request: Request,
+    container: ContainerDep,
+    _: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
+) -> User:
     """The caller: an API key (``Authorization: Bearer``) or the browser session."""
     if secret := bearer(request):
         holder = await check_key(container.uow_factory, secret, container.clock)

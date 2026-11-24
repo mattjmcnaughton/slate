@@ -257,3 +257,50 @@ async def test_database_refuses_cross_workspace_links(raw_factory):
         with pytest.raises((ValueError, IntegrityError)):
             await uow.tasks.add(Task(title="sneaky", project_id=project.id))
             await uow.commit()
+
+
+async def test_agent_settings_pending_changes_and_messages(raw_factory):
+    from slate.domain import AgentMessage, AgentMode, PendingChange, PendingStatus
+
+    ws_a = await new_workspace(raw_factory, "a")
+    ws_b = await new_workspace(raw_factory, "b")
+    async with raw_factory() as uow:
+        owner = (await uow.workspaces.get(ws_a)).owner_id
+    async with raw_factory(ws_a) as uow:
+        s = await uow.settings.get()
+        assert (s.agent_enabled, s.agent_mode, s.agent_instructions) == (False, "suggest", "")
+        s.agent_enabled, s.agent_mode, s.agent_instructions = True, AgentMode.APPLY, "Be brief"
+        await uow.settings.save(s)
+        p = await uow.pending_changes.add(
+            PendingChange(
+                tool="save_tasks",
+                input={"tasks": [{"title": "x"}]},
+                summary="New task: x",
+                origin="mcp",
+                created_by=owner,
+            )
+        )
+        await uow.agent_messages.add(AgentMessage(user_id=owner, role="owner", content="hi"))
+        await uow.commit()
+    async with raw_factory(ws_a) as uow:
+        s = await uow.settings.get()
+        assert (s.agent_enabled, s.agent_mode, s.agent_instructions) == (True, "apply", "Be brief")
+        got = await uow.pending_changes.get(p.id)
+        assert got.input == {"tasks": [{"title": "x"}]} and got.status == PendingStatus.PENDING
+        got.status, got.result = PendingStatus.APPLIED, {"ok": 1}
+        assert await uow.pending_changes.resolve(got) is True
+        assert await uow.pending_changes.resolve(got) is False  # only once
+        await uow.commit()
+    async with raw_factory(ws_a) as uow:
+        assert await uow.pending_changes.list(PendingStatus.PENDING) == []
+        [done] = await uow.pending_changes.list()
+        assert (done.status, done.result, done.resolved_at) == ("applied", {"ok": 1}, NOW)
+        assert [m.content for m in await uow.agent_messages.list_for_user(owner)] == ["hi"]
+    async with raw_factory(ws_b) as uow:
+        assert await uow.pending_changes.get(p.id) is None
+        assert await uow.agent_messages.list_for_user(owner) == []
+        assert (await uow.settings.get()).agent_enabled is False
+    async with raw_factory(ws_a) as uow:
+        await uow.agent_messages.clear(owner)
+        await uow.commit()
+        assert await uow.agent_messages.list_for_user(owner) == []

@@ -3,9 +3,17 @@ import { useEffect, useMemo } from "react";
 import { useIsPhone } from "../hooks/useMedia";
 import { useTaskActions } from "../lib/actions";
 import { type Binding, createDispatcher } from "../lib/keys";
-import { useAgenda, useAreas, useMe, useProjects, useTasks } from "../lib/queries";
+import {
+  useAgenda,
+  useAreas,
+  useMe,
+  usePendingChanges,
+  useProjects,
+  useTasks,
+} from "../lib/queries";
 import { useTheme } from "../stores/theme";
 import { anyLayerOpen, targetIds, useUI } from "../stores/ui";
+import { Assistant, IconSpark } from "./Assistant";
 import { MenuHost } from "./Menus";
 import { ConfirmDialog, Keys, ShortcutSheet, Toasts } from "./Overlays";
 import { Palette, signOut } from "./Palette";
@@ -44,6 +52,11 @@ function useGlobalKeys() {
     };
 
     const bindings: Binding[] = [
+      {
+        keys: "mod+j",
+        allowInInput: true,
+        run: () => ui().setAssistant(!ui().assistant),
+      },
       {
         keys: "mod+k",
         allowInInput: true,
@@ -128,6 +141,7 @@ function closeTop() {
 export function Shell({ children }: { children: React.ReactNode }) {
   const phone = useIsPhone();
   const detailId = useUI((s) => s.detailId);
+  const assistant = useUI((s) => s.assistant);
   const me = useMe();
   useGlobalKeys();
 
@@ -163,10 +177,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
           {detailId !== null && <TaskDetail id={detailId} phone={phone} />}
+          {assistant && !phone && <Assistant phone={false} />}
         </div>
         {!phone && <ModeLine />}
       </div>
       {phone && <TabBar />}
+      {assistant && phone && <Assistant phone />}
+      {phone && !assistant && detailId === null && (
+        <button
+          type="button"
+          aria-label="Open assistant"
+          onClick={() => useUI.getState().setAssistant(true)}
+          className="fixed bottom-[calc(144px+env(safe-area-inset-bottom))] right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-raise text-accent shadow-[var(--shadow)]"
+        >
+          <IconSpark size={20} />
+        </button>
+      )}
       {phone && detailId === null && (
         <button
           type="button"
@@ -220,6 +246,8 @@ function Sidebar() {
   const projects = useProjects().data ?? [];
   const agenda = useAgenda().data;
   const inbox = useTasks({ inbox: true, top_level: true }).data;
+  const pending = (usePendingChanges().data ?? []).filter((p) => p.status === "pending").length;
+  const assistantOpen = useUI((s) => s.assistant);
   const theme = useTheme();
   const todayCount = agenda
     ? agenda.overdue.length + (agenda.days.find((d) => d.date === agenda.today)?.tasks.length ?? 0)
@@ -270,6 +298,47 @@ function Sidebar() {
         <NavItem to="/upcoming" icon={<IconUpcoming />} label="Upcoming" keys="g u" />
         <NavItem to="/inbox" icon={<IconInbox />} label="Inbox" count={inbox?.length} keys="g i" />
         <NavItem to="/all" icon={<IconAll />} label="All tasks" keys="g a" />
+        <Link
+          to="/pending"
+          className="group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-ink2 hover:bg-hover hover:text-ink"
+          activeProps={{ className: "!bg-accent-soft !text-ink font-medium" }}
+        >
+          <span className="text-ink3">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 8v4l3 2" />
+            </svg>
+          </span>
+          <span className="flex-1 truncate">Pending changes</span>
+          {pending > 0 && (
+            <span className="rounded-full bg-amber/15 px-1.5 text-[11px] leading-4 tabular-nums text-amber">
+              {pending}
+            </span>
+          )}
+        </Link>
+        <button
+          type="button"
+          onClick={() => useUI.getState().setAssistant(!assistantOpen)}
+          aria-pressed={assistantOpen}
+          className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] hover:bg-hover hover:text-ink ${
+            assistantOpen ? "bg-accent-soft font-medium text-ink" : "text-ink2"
+          }`}
+        >
+          <span className="text-accent">
+            <IconSpark />
+          </span>
+          <span className="flex-1 text-left">Assistant</span>
+          <Keys keys="mod+j" />
+        </button>
 
         <div className="mb-1 mt-5 flex items-center justify-between px-2.5">
           <Link to="/projects" className="text-[12px] font-medium text-ink3 hover:text-ink">

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
 
 # Paths owned by the backend; everything else is a client-side route.
-BACKEND_PREFIXES = ("api/", "auth/", "docs", "openapi.json", "healthz", "readyz")
+BACKEND_PREFIXES = ("api/", "auth/", "mcp", "docs", "openapi.json", "healthz", "readyz")
 
 
 def mount_frontend(app: FastAPI, dist: Path = FRONTEND_DIST) -> None:

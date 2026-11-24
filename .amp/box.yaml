@@ -5,6 +5,7 @@ artifacts: [.box]
 # API keys guard every /api route. Secrets live on the Box, never in Git:
 # DATABASE_URL (Neon, postgresql+asyncpg://...?ssl=verify-full), OIDC_CLIENT_ID,
 # OIDC_CLIENT_SECRET, APP_SESSION_SECRET, SLATE_ALLOWED_USER_IDS, SLATE_ALLOWED_EMAILS,
+# OPENROUTER_API_KEY (the assistant),
 # in $AMP_DEPLOYMENT_DATA_DIRECTORY/secrets.env (loaded by .box/run.sh).
 services:
   web:

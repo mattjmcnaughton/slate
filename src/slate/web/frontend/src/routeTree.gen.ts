@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AllRouteImport } from './routes/all'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as PendingRouteImport } from './routes/pending'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TodayRouteImport } from './routes/today'
 import { Route as UpcomingRouteImport } from './routes/upcoming'
@@ -32,6 +33,11 @@ const AllRoute = AllRouteImport.update({
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PendingRoute = PendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/all': typeof AllRoute
   '/inbox': typeof InboxRoute
+  '/pending': typeof PendingRoute
   '/settings': typeof SettingsRoute
   '/today': typeof TodayRoute
   '/upcoming': typeof UpcomingRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/all': typeof AllRoute
   '/inbox': typeof InboxRoute
+  '/pending': typeof PendingRoute
   '/settings': typeof SettingsRoute
   '/today': typeof TodayRoute
   '/upcoming': typeof UpcomingRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/all': typeof AllRoute
   '/inbox': typeof InboxRoute
+  '/pending': typeof PendingRoute
   '/settings': typeof SettingsRoute
   '/today': typeof TodayRoute
   '/upcoming': typeof UpcomingRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/all'
     | '/inbox'
+    | '/pending'
     | '/settings'
     | '/today'
     | '/upcoming'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/all'
     | '/inbox'
+    | '/pending'
     | '/settings'
     | '/today'
     | '/upcoming'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/all'
     | '/inbox'
+    | '/pending'
     | '/settings'
     | '/today'
     | '/upcoming'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AllRoute: typeof AllRoute
   InboxRoute: typeof InboxRoute
+  PendingRoute: typeof PendingRoute
   SettingsRoute: typeof SettingsRoute
   TodayRoute: typeof TodayRoute
   UpcomingRoute: typeof UpcomingRoute
@@ -168,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pending': {
+      id: '/pending'
+      path: '/pending'
+      fullPath: '/pending'
+      preLoaderRoute: typeof PendingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -219,6 +239,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AllRoute: AllRoute,
   InboxRoute: InboxRoute,
+  PendingRoute: PendingRoute,
   SettingsRoute: SettingsRoute,
   TodayRoute: TodayRoute,
   UpcomingRoute: UpcomingRoute,

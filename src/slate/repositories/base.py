@@ -14,6 +14,7 @@ unit of work opened without a workspace.
 
 from __future__ import annotations
 
+import builtins
 from typing import TYPE_CHECKING, Protocol, Self
 
 if TYPE_CHECKING:
@@ -22,10 +23,13 @@ if TYPE_CHECKING:
     from slate.domain import (
         Account,
         Activity,
+        AgentMessage,
         ApiKey,
         Area,
         Comment,
         Label,
+        PendingChange,
+        PendingStatus,
         Project,
         Settings,
         Task,
@@ -112,6 +116,27 @@ class SettingsRepository(Protocol):
     async def save(self, settings: Settings) -> Settings: ...
 
 
+class PendingChangeRepository(Protocol):
+    async def add(self, change: PendingChange) -> PendingChange: ...
+    async def get(self, id: UUID) -> PendingChange | None: ...
+    async def list(self, status: PendingStatus | None = None) -> builtins.list[PendingChange]:
+        """Oldest first."""
+        ...
+
+    async def resolve(self, change: PendingChange) -> bool:
+        """Set status, error, result, and input if still pending; False otherwise."""
+        ...
+
+
+class AgentMessageRepository(Protocol):
+    async def add(self, message: AgentMessage) -> AgentMessage: ...
+    async def list_for_user(self, user_id: UUID) -> list[AgentMessage]:
+        """Oldest first."""
+        ...
+
+    async def clear(self, user_id: UUID) -> None: ...
+
+
 class UserRepository(Protocol):
     async def get(self, id: UUID) -> Account | None: ...
     async def record_sign_in(self, account: Account) -> Account:
@@ -146,6 +171,8 @@ class UnitOfWork(Protocol):
     comments: CommentRepository
     activity: ActivityRepository
     settings: SettingsRepository
+    pending_changes: PendingChangeRepository
+    agent_messages: AgentMessageRepository
 
     async def __aenter__(self) -> Self: ...
     async def __aexit__(self, *exc: object) -> None:
