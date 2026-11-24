@@ -66,6 +66,7 @@ def _key(c: TestClient, kind: str = "rest") -> dict[str, str]:
 def test_requires_auth_until_signed_in(client):
     assert client.get("/api/tasks").status_code == 401
     assert client.get("/healthz").status_code == 200
+    assert client.get("/readyz").status_code == 200
     _sign_in(client, "/projects/x")
     me = client.get("/api/me").json()
     assert (me["name"], me["email"], me["via"]) == ("Me", "me@example.com", "session")
