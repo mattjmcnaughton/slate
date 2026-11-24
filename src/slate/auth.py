@@ -21,7 +21,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 from urllib.parse import urlencode
 from uuid import UUID
@@ -49,6 +49,10 @@ class User:
     email: str | None = None
     via: str = "session"  # session | key | dev
     key_kind: str | None = None  # rest | mcp, when via == "key"
+    # The identity provider's session id (the ID token's ``sid``), so sign-out
+    # can end that session too. Without it the provider signs the same person
+    # straight back in, and nobody can switch accounts.
+    sid: str | None = None
 
 
 def bearer(request: Request) -> str | None:
@@ -92,6 +96,7 @@ class SessionAuthenticator:
                 workspace_id=UUID(data["ws"]),
                 name=data["name"],
                 email=data.get("email"),
+                sid=data.get("sid"),
             )
         except (BadSignature, KeyError, ValueError, TypeError):
             return None  # includes cookies from before workspaces existed
@@ -103,6 +108,7 @@ class SessionAuthenticator:
                 "ws": str(user.workspace_id),
                 "name": user.name,
                 "email": user.email,
+                "sid": user.sid,
             },
             salt="session",
         )
@@ -152,11 +158,15 @@ class Identity:
     subject: str
     name: str
     email: str | None = None
+    session_id: str | None = None  # the provider's ``sid`` for this login
 
 
 class OAuthProvider(Protocol):
     async def authorization_url(self, tx: OAuthTransaction) -> str: ...
     async def exchange(self, code: str, tx: OAuthTransaction) -> Identity: ...
+    async def logout_url(self, session_id: str | None, return_to: str) -> str | None:
+        """Where to send the browser to end the provider's session, then land on ``return_to``."""
+        ...
 
 
 class OIDCProvider:
@@ -257,14 +267,52 @@ class OIDCProvider:
             raise OAuthError("wrong authorized party")
         email = claims.get("email") if claims.get("email_verified") else None
         name = claims.get("name") or email or claims.get("nickname") or "Slate user"
-        return Identity(issuer=self.issuer, subject=claims["sub"], name=name, email=email)
+        return Identity(
+            issuer=self.issuer,
+            subject=claims["sub"],
+            name=name,
+            email=email,
+            session_id=claims.get("sid"),
+        )
+
+    async def logout_url(self, session_id: str | None, return_to: str) -> str | None:
+        try:
+            endpoint = (await self._discover()).get("end_session_endpoint")
+        except OAuthError:
+            return None
+        if not endpoint:
+            return None
+        # RP-initiated logout. logout_hint (the sid) lets Auth0 skip its
+        # "are you sure?" prompt; return_to must be an Allowed Logout URL.
+        params = {"client_id": self.client_id, "post_logout_redirect_uri": return_to}
+        if session_id:
+            params["logout_hint"] = session_id
+        return f"{endpoint}?{urlencode(params)}"
 
 
 class FakeOAuthProvider:
-    """Accepts any code and signs in as ``identity``. For tests only."""
+    """An identity provider with single sign-on, for tests only.
+
+    The first sign-in logs in as ``identity`` and starts a provider session;
+    later sign-ins reuse that session (as Auth0 does) until the browser visits
+    ``logout_url``, which tests do with ``end_session``. Set ``identity`` to
+    choose who logs in at the next login prompt.
+    """
+
+    LOGOUT = "https://auth.example.test/logout"
 
     def __init__(self, identity: Identity) -> None:
         self.identity = identity
+        self.session: Identity | None = None
+
+    async def logout_url(self, session_id: str | None, return_to: str) -> str | None:
+        params = {"logout_hint": session_id or "", "post_logout_redirect_uri": return_to}
+        return f"{self.LOGOUT}?{urlencode(params)}"
+
+    def end_session(self, logout_url: str) -> None:
+        """What visiting ``logout_url`` does: end the session it names."""
+        if self.session and f"logout_hint={self.session.session_id}" in logout_url:
+            self.session = None
 
     async def authorization_url(self, tx: OAuthTransaction) -> str:
         return f"https://auth.example.test/authorize?{urlencode({'state': tx.state})}"
@@ -272,4 +320,6 @@ class FakeOAuthProvider:
     async def exchange(self, code: str, tx: OAuthTransaction) -> Identity:
         if code == "bad":
             raise OAuthError("bad code")
-        return self.identity
+        if self.session is None:
+            self.session = replace(self.identity, session_id=f"sid-{secrets.token_hex(4)}")
+        return self.session

@@ -241,3 +241,61 @@ def test_demo_seed_gives_a_full_today():
         ag = client.get("/api/agenda").json()
         assert len(ag["overdue"]) >= 2 and len(ag["days"][0]["tasks"]) >= 3
         assert any(d["ghosts"] for d in ag["days"])
+
+
+def test_two_people_share_one_browser_by_signing_out():
+    """Sign in, work, sign out, sign in as someone else, in one browser.
+
+    The provider fake keeps a single sign-on session like Auth0: unless sign-out
+    ends it, the next sign-in silently returns the first person again.
+    """
+    container = _container()
+    provider = container.oauth
+    assert isinstance(provider, FakeOAuthProvider)
+    with _client(container) as c:
+        _sign_in(c)
+        me = c.get("/api/me").json()
+        mine = c.post("/api/tasks", json={"title": "Matt's"}).json()
+
+        out = c.post("/auth/signout", follow_redirects=False)
+        assert out.status_code == 303
+        logout = out.headers["location"]
+        assert logout.startswith(FakeOAuthProvider.LOGOUT)
+        assert "post_logout_redirect_uri=http%3A%2F%2Ftestserver%2F" in logout
+        assert c.get("/api/me").status_code == 401
+        provider.end_session(logout)  # the browser follows the redirect
+        assert provider.session is None
+
+        provider.identity = YOU  # who types their credentials at the login prompt
+        _sign_in(c)
+        you = c.get("/api/me").json()
+        assert (you["name"], you["via"]) == ("You", "session")
+        assert you["workspace_id"] != me["workspace_id"]
+        assert c.get("/api/tasks").json() == []
+        assert c.get(f"/api/tasks/{mine['id']}").status_code == 404
+        assert c.post("/api/tasks", json={"title": "Yours"}).json()["key"] == "SLT-1"
+
+        c.post("/auth/signout", follow_redirects=False)
+        provider.session = None
+        provider.identity = ME
+        _sign_in(c)
+        assert c.get("/api/me").json()["workspace_id"] == me["workspace_id"]
+        assert [t["title"] for t in c.get("/api/tasks").json()] == ["Matt's"]
+
+
+def test_refused_account_can_switch_to_another():
+    stranger = Identity(issuer=ISSUER, subject="auth0|x", name="X", email="x@example.com")
+    container = _container(identity=stranger)
+    provider = container.oauth
+    assert isinstance(provider, FakeOAuthProvider)
+    with _client(container) as c:
+        r = c.get("/auth/signin", follow_redirects=False)
+        state = r.headers["location"].split("state=")[1]
+        refused = c.get(f"/auth/callback?code=ok&state={state}")
+        assert refused.status_code == 403 and "text/html" in refused.headers["content-type"]
+        assert "auth0|x" in refused.text and "Sign in with a different account" in refused.text
+        switch = refused.text.split('<a href="')[1].split('"')[0].replace("&amp;", "&")
+        provider.end_session(switch)
+        provider.identity = ME
+        _sign_in(c)
+        assert c.get("/api/me").json()["name"] == "Me"

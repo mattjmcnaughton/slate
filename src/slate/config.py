@@ -68,8 +68,13 @@ class Settings(BaseSettings):
         )
 
     @property
+    def public_url(self) -> str:
+        """The app's base URL with a trailing slash, or "" when unknown."""
+        base = self.slate_public_url or self.amp_deployment_url
+        return base.rstrip("/") + "/" if base else ""
+
+    @property
     def redirect_uri(self) -> str:
         if self.oidc_redirect_uri:
             return self.oidc_redirect_uri
-        base = self.slate_public_url or self.amp_deployment_url
-        return base.rstrip("/") + "/auth/callback" if base else ""
+        return self.public_url + "auth/callback" if self.public_url else ""

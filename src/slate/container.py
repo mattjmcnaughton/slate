@@ -39,6 +39,9 @@ class Container:
     allowed_user_ids: frozenset[str] = frozenset()
     allowed_emails: frozenset[str] = frozenset()
     secure_cookies: bool = True
+    # Where the provider sends the browser after sign-out; must be one of its
+    # Allowed Logout URLs. "" means this request's own base URL.
+    public_url: str = ""
     # Run in order at startup (migrations, seeding); each gets the container.
     startup: list[Callable[[Container], Awaitable[None]]] = field(default_factory=list)
     shutdown: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
@@ -119,6 +122,7 @@ def build_container(settings: Settings) -> Container:
         allowed_user_ids=settings.allowed_user_ids,
         allowed_emails=settings.allowed_emails,
         secure_cookies=secure,
+        public_url=settings.public_url,
         startup=startup,
         shutdown=shutdown,
     )
