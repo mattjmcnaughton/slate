@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 from itsdangerous import URLSafeTimedSerializer
 
 from slate.auth import (
-    DEV_USER,
     Authenticator,
     DevAuthenticator,
     OAuthProvider,
@@ -37,6 +36,7 @@ class Container:
     authenticator: Authenticator
     oauth: OAuthProvider | None = None
     signer: URLSafeTimedSerializer | None = None
+    allowed_user_ids: frozenset[str] = frozenset()
     allowed_emails: frozenset[str] = frozenset()
     secure_cookies: bool = True
     # Run in order at startup (migrations, seeding); each gets the container.
@@ -80,17 +80,17 @@ def build_container(settings: Settings) -> Container:
         startup.append(migrate)
         shutdown.append(engine.dispose)
 
-    if settings.slate_seed == "demo":
-        from slate.seed import seed_if_empty
-
-        startup.append(seed_if_empty)
-
     secure = not settings.redirect_uri.startswith("http://")
     if settings.slate_auth == "dev":
+        from slate.seed import provision_dev_user, seed_if_empty
+
+        startup.append(provision_dev_user)
+        if settings.slate_seed == "demo":
+            startup.append(seed_if_empty)
         return Container(
             clock=clock,
             uow_factory=uow_factory,
-            authenticator=DevAuthenticator(settings.api_tokens, DEV_USER),
+            authenticator=DevAuthenticator(),
             startup=startup,
             shutdown=shutdown,
             secure_cookies=False,
@@ -113,9 +113,10 @@ def build_container(settings: Settings) -> Container:
     return Container(
         clock=clock,
         uow_factory=uow_factory,
-        authenticator=SessionAuthenticator(signer, settings.api_tokens),
+        authenticator=SessionAuthenticator(signer),
         oauth=oauth,
         signer=signer,
+        allowed_user_ids=settings.allowed_user_ids,
         allowed_emails=settings.allowed_emails,
         secure_cookies=secure,
         startup=startup,

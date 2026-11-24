@@ -5,7 +5,7 @@ same semantics in SQL, and the contract tests check that both agree.
 
 Sorting: the chosen key ascends (or descends with ``order="desc"``); tasks
 without a value for it (no due date, priority 0) always come last. Ties break
-by due date, then priority, then id, all ascending.
+by due date, then priority, then id (creation order), all ascending.
 """
 
 from __future__ import annotations
@@ -16,10 +16,12 @@ from typing import TYPE_CHECKING
 from slate.domain import CLOSED_STATUSES
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from slate.domain import Project, Task, TaskFilter
 
 
-def matches(task: Task, f: TaskFilter, projects: dict[int, Project]) -> bool:
+def matches(task: Task, f: TaskFilter, projects: dict[UUID, Project]) -> bool:
     if f.statuses:
         if task.status not in f.statuses:
             return False
@@ -34,10 +36,10 @@ def matches(task: Task, f: TaskFilter, projects: dict[int, Project]) -> bool:
             return False
     if f.inbox and not task.is_inbox:
         return False
-    if f.parent_id is not None:
-        wanted = None if f.parent_id == 0 else f.parent_id
-        if task.parent_id != wanted:
-            return False
+    if f.top_level and task.parent_id is not None:
+        return False
+    if f.parent_id is not None and task.parent_id != f.parent_id:
+        return False
     if f.priorities and task.priority not in f.priorities:
         return False
     if f.label_id is not None and f.label_id not in task.label_ids:
@@ -62,7 +64,7 @@ _EPOCH = datetime.min
 
 
 def _tiebreak(t: Task) -> tuple:
-    return (t.due_date or _FAR, t.priority or 9, t.id or 0)
+    return (t.due_date or _FAR, t.priority or 9, t.id)
 
 
 def sort_tasks(tasks: list[Task], f: TaskFilter) -> list[Task]:

@@ -50,8 +50,8 @@ function GhostRow({ ghost, task }: { ghost: Ghost; task: Task | undefined }) {
   );
 }
 
-function allTasks(a: Agenda): Map<number, Task> {
-  const map = new Map<number, Task>();
+function allTasks(a: Agenda): Map<string, Task> {
+  const map = new Map<string, Task>();
   for (const t of a.overdue) map.set(t.id, t);
   for (const d of a.days) for (const t of d.tasks) map.set(t.id, t);
   return map;

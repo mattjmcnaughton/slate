@@ -8,7 +8,7 @@ import {
   usePageContext,
 } from "../../components/TaskList";
 import { Dot } from "../../components/icons";
-import { useLookups, useTasks } from "../../lib/queries";
+import { useAreas, useLookups, useTasks } from "../../lib/queries";
 
 export const Route = createFileRoute("/areas/$areaId")({
   component: AreaPage,
@@ -17,11 +17,12 @@ export const Route = createFileRoute("/areas/$areaId")({
 function AreaPage() {
   const { areaId } = Route.useParams();
   const lookups = useLookups();
-  const area = lookups.areasByUuid.get(areaId);
-  const id = area?.id ?? -1;
-  const { data } = useTasks({ area_id: id, parent_id: 0, sort: "due" });
+  const area = lookups.areas.get(areaId);
+  const loaded = useAreas().isSuccess;
+  const id = area?.id ?? "";
+  const { data } = useTasks({ area_id: id, top_level: true, sort: "due" }, Boolean(area));
   usePageContext({ areaId: id, projectId: null }, [id]);
-  if (!area) return lookups.areas.size ? <Empty title="This area does not exist" /> : null;
+  if (!area) return loaded ? <Empty title="This area does not exist" /> : null;
 
   const projects = [...lookups.projects.values()].filter((p) => p.area_id === id);
   const groups: Group[] = [

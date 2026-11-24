@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from slate.clock import FixedClock
-from slate.domain import Area, Project, Task, TaskFilter, TaskStatus
+from slate.domain import Area, Project, Task, TaskFilter, TaskStatus, Workspace, new_id
 from slate.repositories.memory import MemoryUnitOfWorkFactory
 from slate.scheduling import Recurrence, RecurrenceMode
 from slate.services.agenda import build_agenda, project_progress
@@ -32,8 +32,10 @@ def clock():
 
 @pytest.fixture
 def svc(clock):
-    uow = MemoryUnitOfWorkFactory(clock)()
-    return TaskService(uow, clock)
+    factory = MemoryUnitOfWorkFactory(clock)
+    ws = Workspace(owner_id=new_id())
+    factory.db.table("workspaces")[ws.id] = ws
+    return TaskService(factory(ws.id), clock)
 
 
 async def test_late_fixed_run_skips_to_after_today(svc, clock):

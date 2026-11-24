@@ -256,12 +256,12 @@ function FilterInput({
   );
 }
 
-function useFirst(ids: number[]) {
+function useFirst(ids: string[]) {
   const qc = useQueryClient();
   return findTask(qc, ids[0]);
 }
 
-function StatusMenu({ ids }: { ids: number[] }) {
+function StatusMenu({ ids }: { ids: string[] }) {
   const actions = useTaskActions();
   const first = useFirst(ids);
   const items: Item[] = STATUSES.map((s) => ({
@@ -275,7 +275,7 @@ function StatusMenu({ ids }: { ids: number[] }) {
   return <ItemList items={items} />;
 }
 
-function PriorityMenu({ ids }: { ids: number[] }) {
+function PriorityMenu({ ids }: { ids: string[] }) {
   const actions = useTaskActions();
   const first = useFirst(ids);
   // Linear order: urgent first, "no priority" last.
@@ -293,7 +293,7 @@ function PriorityMenu({ ids }: { ids: number[] }) {
   return <ItemList items={items} />;
 }
 
-function LabelsMenu({ ids }: { ids: number[] }) {
+function LabelsMenu({ ids }: { ids: string[] }) {
   const qc = useQueryClient();
   const lookups = useLookups();
   const actions = useTaskActions();
@@ -301,11 +301,11 @@ function LabelsMenu({ ids }: { ids: number[] }) {
   const [filter, setFilter] = useState("");
   // Re-read on every render so toggles show immediately (the cache is optimistic).
   const tasks = ids.map((id) => findTask(qc, id)).filter((t) => t !== undefined);
-  const has = (labelId: number) =>
+  const has = (labelId: string) =>
     tasks.length > 0 && tasks.every((t) => t.label_ids.includes(labelId));
   const [, force] = useState(0);
 
-  const toggle = (labelId: number) => {
+  const toggle = (labelId: string) => {
     const on = has(labelId);
     for (const t of tasks) {
       const next = on
@@ -351,7 +351,7 @@ function LabelsMenu({ ids }: { ids: number[] }) {
   );
 }
 
-function DueMenu({ ids }: { ids: number[] }) {
+function DueMenu({ ids }: { ids: string[] }) {
   const today = useToday();
   const actions = useTaskActions();
   const first = useFirst(ids);
@@ -429,7 +429,7 @@ function DueMenu({ ids }: { ids: number[] }) {
   );
 }
 
-function ProjectMenu({ ids }: { ids: number[] }) {
+function ProjectMenu({ ids }: { ids: string[] }) {
   const lookups = useLookups();
   const actions = useTaskActions();
   const first = useFirst(ids);

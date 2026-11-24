@@ -163,7 +163,7 @@ export function TaskRow({ task, today, lookups, hideWhere, hideDue }: Props) {
 }
 
 /** Register the ids the keyboard cursor walks over (in display order). */
-export function useVisibleIds(ids: number[]) {
+export function useVisibleIds(ids: string[]) {
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by the joined ids
   useEffect(() => {

@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from slate.domain import Area, Comment, Label, Project, ProjectStatus, Task, TaskStatus
 
@@ -99,9 +100,9 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
     uow = svc.uow
     src = batch.source
     report = ImportReport()
-    ids: dict[str, dict[str, int]] = {"area": {}, "project": {}, "label": {}, "task": {}}
+    ids: dict[str, dict[str, UUID]] = {"area": {}, "project": {}, "label": {}, "task": {}}
 
-    async def resolve(kind: str, repo, source_id: str | None) -> int | None:
+    async def resolve(kind: str, repo, source_id: str | None) -> UUID | None:
         if not source_id:
             return None
         if source_id in ids[kind]:
@@ -129,7 +130,7 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
                     source_id=a.source_id,
                 )
             )
-        ids["area"][a.source_id] = saved.id  # type: ignore[assignment]
+        ids["area"][a.source_id] = saved.id
         report.bump("areas", existing is None)
 
     for lb in batch.labels:
@@ -142,13 +143,13 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
             saved = await uow.labels.add(
                 Label(name=lb.name, color=lb.color or "#6b7280", source=src, source_id=lb.source_id)
             )
-        ids["label"][lb.source_id] = saved.id  # type: ignore[assignment]
+        ids["label"][lb.source_id] = saved.id
         report.bump("labels", existing is None)
 
     for p in batch.projects:
         area_id = await resolve("area", uow.areas, p.area_source_id)
         existing = await uow.projects.get_by_source(src, p.source_id)
-        fields = dict(
+        fields: dict[str, Any] = dict(
             name=p.name,
             area_id=area_id,
             status=p.status,
@@ -163,7 +164,7 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
             saved = await uow.projects.add(
                 Project(**fields, source=src, source_id=p.source_id, created_at=p.created_at)
             )
-        ids["project"][p.source_id] = saved.id  # type: ignore[assignment]
+        ids["project"][p.source_id] = saved.id
         report.bump("projects", existing is None)
 
     # Parents before children, whatever order the agent sent.
@@ -222,7 +223,7 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
                 {"source": src, "source_id": it.source_id},  # noqa: SLF001
                 at=saved.created_at,
             )
-        ids["task"][it.source_id] = saved.id  # type: ignore[assignment]
+        ids["task"][it.source_id] = saved.id
         report.bump("tasks", existing is None)
 
         for c in it.comments:

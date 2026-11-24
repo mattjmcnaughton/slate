@@ -1,7 +1,8 @@
 """Demo data for local development, dated relative to "today".
 
-Loaded at startup when SLATE_SEED=demo and the database has no areas. It goes
-through the real services, so seeded tasks follow the same rules as real ones.
+Loaded at startup when SLATE_SEED=demo and the dev user's workspace has no
+areas. It goes through the real services, so seeded tasks follow the same rules
+as real ones.
 """
 
 from __future__ import annotations
@@ -9,16 +10,47 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
+from slate.auth import DEV_IDENTITY_ISSUER, DevAuthenticator, Identity, User
 from slate.domain import Area, Label, Project, ProjectStatus, Task, TaskStatus
 from slate.scheduling import Recurrence, RecurrenceMode
+from slate.services.accounts import sign_in
 from slate.services.tasks import TaskService
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from slate.container import Container
 
 
-async def seed_if_empty(container: Container) -> None:
+DEV_IDENTITY = Identity(
+    issuer=DEV_IDENTITY_ISSUER, subject="dev", name="Dev User", email="dev@example.com"
+)
+
+
+async def provision_dev_user(container: Container) -> None:
+    """Create (or reuse) the dev account and workspace; every dev request acts as it."""
     async with container.uow_factory() as uow:
+        signed = await sign_in(uow, DEV_IDENTITY)
+        await uow.commit()
+    auth = container.authenticator
+    assert isinstance(auth, DevAuthenticator)
+    auth.user = User(
+        id=signed.account.id,
+        workspace_id=signed.workspace.id,
+        name=signed.account.name,
+        email=signed.account.email,
+        via="dev",
+    )
+
+
+async def seed_if_empty(container: Container) -> None:
+    auth = container.authenticator
+    assert isinstance(auth, DevAuthenticator) and auth.user is not None
+    await seed_workspace(container, auth.user.workspace_id)
+
+
+async def seed_workspace(container: Container, workspace_id: UUID) -> None:
+    async with container.uow_factory(workspace_id) as uow:
         if await uow.areas.list():
             return
         svc = TaskService(uow, container.clock)
@@ -117,7 +149,7 @@ async def seed_demo(svc: TaskService) -> None:
         comments = kw.pop("comments", [])
         t = await svc.create(Task(**kw))
         for i, body in enumerate(comments):
-            await svc.add_comment(t.id, body, created_at=ago(len(comments) - i))  # type: ignore[arg-type]
+            await svc.add_comment(t.id, body, created_at=ago(len(comments) - i))
         return t
 
     # Inbox and daily life (Todoist side).

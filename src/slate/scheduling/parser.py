@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
 
@@ -193,10 +193,10 @@ def parse_schedule(text: str, ctx: ParseContext) -> ScheduleResult:
 
 @dataclass
 class _Fields:
-    area_id: int | None = None
-    project_id: int | None = None
+    area_id: Any = None
+    project_id: Any = None
     unknown_project: str | None = None
-    label_ids: list[int] = field(default_factory=list)
+    label_ids: list[Any] = field(default_factory=list)
     unknown_labels: list[str] = field(default_factory=list)
     priority: int | None = None
     status: str | None = None

@@ -29,11 +29,12 @@ export const qk = {
   projects: ["projects"] as const,
   labels: ["labels"] as const,
   tasks: (q: TaskQuery) => ["tasks", q] as const,
-  task: (id: number) => ["task", id] as const,
-  comments: (id: number) => ["comments", id] as const,
-  activity: (id: number) => ["activity", id] as const,
+  task: (id: string) => ["task", id] as const,
+  comments: (id: string) => ["comments", id] as const,
+  activity: (id: string) => ["activity", id] as const,
   agenda: (days: number) => ["agenda", days] as const,
   parse: (text: string) => ["parse", text] as const,
+  apiKeys: ["api-keys"] as const,
 };
 
 // --- reads ------------------------------------------------------------------------
@@ -51,7 +52,8 @@ export const useProjects = () =>
   useQuery({
     queryKey: qk.projects,
     queryFn: () => api.projects(),
-    select: (ps: Project[]) => [...ps].sort((a, b) => a.position - b.position || a.id - b.id),
+    select: (ps: Project[]) =>
+      [...ps].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)),
   });
 export const useLabels = () => useQuery({ queryKey: qk.labels, queryFn: api.labels });
 
@@ -86,20 +88,20 @@ export function useToday(): string | undefined {
   return useAgenda().data?.today;
 }
 
-export function useTask(id: number | null) {
+export function useTask(id: string | null) {
   const qc = useQueryClient();
   return useQuery({
-    queryKey: qk.task(id ?? 0),
-    queryFn: () => api.task(id as number),
+    queryKey: qk.task(id ?? ""),
+    queryFn: () => api.task(id as string),
     enabled: id !== null,
     initialData: () => (id === null ? undefined : findTask(qc, id)),
     initialDataUpdatedAt: 0,
   });
 }
 
-export const useComments = (id: number) =>
+export const useComments = (id: string) =>
   useQuery({ queryKey: qk.comments(id), queryFn: () => api.comments(id) });
-export const useActivity = (id: number) =>
+export const useActivity = (id: string) =>
   useQuery({ queryKey: qk.activity(id), queryFn: () => api.activity(id) });
 
 export function useDebounced<T>(value: T, ms: number): T {
@@ -124,12 +126,9 @@ export function useParse(text: string) {
 }
 
 export interface Lookups {
-  areas: Map<number, Area>;
-  projects: Map<number, Project>;
-  labels: Map<number, Label>;
-  /** By uuid, the identifier URLs use. */
-  areasByUuid: Map<string, Area>;
-  projectsByUuid: Map<string, Project>;
+  areas: Map<string, Area>;
+  projects: Map<string, Project>;
+  labels: Map<string, Label>;
 }
 
 export function useLookups(): Lookups {
@@ -141,8 +140,6 @@ export function useLookups(): Lookups {
       areas: new Map((areas ?? []).map((a) => [a.id, a])),
       projects: new Map((projects ?? []).map((p) => [p.id, p])),
       labels: new Map((labels ?? []).map((l) => [l.id, l])),
-      areasByUuid: new Map((areas ?? []).map((a) => [a.uuid, a])),
-      projectsByUuid: new Map((projects ?? []).map((p) => [p.uuid, p])),
     }),
     [areas, projects, labels],
   );
@@ -153,7 +150,7 @@ export function useLookups(): Lookups {
 const TASK_PREFIXES: QueryKey[] = [["tasks"], ["agenda"], ["task"]];
 
 /** Find a task in any cached list, agenda, or detail query. */
-export function findTask(qc: QueryClient, id: number): Task | undefined {
+export function findTask(qc: QueryClient, id: string): Task | undefined {
   const direct = qc.getQueryData<Task>(qk.task(id));
   if (direct) return direct;
   for (const [, data] of qc.getQueriesData<Task[]>({ queryKey: ["tasks"] })) {
@@ -170,7 +167,7 @@ export function findTask(qc: QueryClient, id: number): Task | undefined {
 }
 
 /** Rewrite (or remove, when `fn` returns null) a task everywhere it is cached. */
-export function updateTaskInCache(qc: QueryClient, id: number, fn: (t: Task) => Task | null) {
+export function updateTaskInCache(qc: QueryClient, id: string, fn: (t: Task) => Task | null) {
   const map = (list: Task[]) =>
     list.flatMap((t) => {
       if (t.id !== id) return [t];
@@ -205,7 +202,7 @@ function restore(qc: QueryClient, snap: Snapshot | undefined) {
   for (const [key, data] of snap ?? []) qc.setQueryData(key, data);
 }
 
-function invalidateTasks(qc: QueryClient, id?: number) {
+function invalidateTasks(qc: QueryClient, id?: string) {
   qc.invalidateQueries({ queryKey: ["tasks"] });
   qc.invalidateQueries({ queryKey: ["agenda"] });
   qc.invalidateQueries({ queryKey: qk.projects });
@@ -239,7 +236,7 @@ const OPTIMISTIC_FIELDS = [
 export function usePatchTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: TaskPatch }) => api.patchTask(id, patch),
+    mutationFn: ({ id, patch }: { id: string; patch: TaskPatch }) => api.patchTask(id, patch),
     onMutate: async ({ id, patch }) => {
       const snap = await snapshot(qc);
       updateTaskInCache(qc, id, (t) => {
@@ -267,7 +264,7 @@ export function useCompleteTask() {
   const toast = useUI((s) => s.toast);
   const reopen = useReopenTask();
   return useMutation({
-    mutationFn: (id: number) => api.complete(id),
+    mutationFn: (id: string) => api.complete(id),
     onMutate: async (id) => {
       const snap = await snapshot(qc);
       updateTaskInCache(qc, id, (t) =>
@@ -304,7 +301,7 @@ export function useCompleteTask() {
 export function useReopenTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api.reopen(id),
+    mutationFn: (id: string) => api.reopen(id),
     onMutate: async (id) => {
       const snap = await snapshot(qc);
       updateTaskInCache(qc, id, (t) => ({ ...t, status: "todo", completed_at: null }));
@@ -324,7 +321,7 @@ export function useToggleComplete() {
   const qc = useQueryClient();
   const complete = useCompleteTask();
   const reopen = useReopenTask();
-  return (id: number) => {
+  return (id: string) => {
     const t = findTask(qc, id);
     if (t && (t.status === "done" || t.status === "canceled")) reopen.mutate(id);
     else complete.mutate(id);
@@ -334,7 +331,7 @@ export function useToggleComplete() {
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api.deleteTask(id),
+    mutationFn: (id: string) => api.deleteTask(id),
     onMutate: async (id) => {
       const snap = await snapshot(qc);
       updateTaskInCache(qc, id, () => null);
@@ -373,7 +370,7 @@ export function useCreateTask() {
   });
 }
 
-export function useCommentMutations(taskId: number) {
+export function useCommentMutations(taskId: string) {
   const qc = useQueryClient();
   const settle = () => {
     qc.invalidateQueries({ queryKey: qk.comments(taskId) });
@@ -387,12 +384,12 @@ export function useCommentMutations(taskId: number) {
       onSettled: settle,
     }),
     edit: useMutation({
-      mutationFn: ({ id, body }: { id: number; body: string }) => api.patchComment(id, body),
+      mutationFn: ({ id, body }: { id: string; body: string }) => api.patchComment(id, body),
       onError: errorToast,
       onSettled: settle,
     }),
     remove: useMutation({
-      mutationFn: (id: number) => api.deleteComment(id),
+      mutationFn: (id: string) => api.deleteComment(id),
       onError: errorToast,
       onSettled: settle,
     }),
@@ -403,7 +400,7 @@ export function useCommentMutations(taskId: number) {
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api.deleteProject(id),
+    mutationFn: (id: string) => api.deleteProject(id),
     onSuccess: (_, id) => {
       qc.setQueryData<Project[]>(qk.projects, (old) => old?.filter((p) => p.id !== id));
     },
@@ -434,4 +431,24 @@ export function usePatchSettings() {
       useUI.getState().toast({ message: `Time zone set to ${s.timezone}` });
     },
   });
+}
+
+export const useApiKeys = () => useQuery({ queryKey: qk.apiKeys, queryFn: api.apiKeys });
+
+export function useApiKeyMutations() {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: qk.apiKeys });
+  return {
+    create: useMutation({
+      mutationFn: api.createApiKey,
+      onError: errorToast,
+      onSettled: refresh,
+    }),
+    revoke: useMutation({
+      mutationFn: api.revokeApiKey,
+      onError: errorToast,
+      onSuccess: () => useUI.getState().toast({ message: "Key revoked" }),
+      onSettled: refresh,
+    }),
+  };
 }

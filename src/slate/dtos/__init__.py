@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from slate.domain import ProjectStatus, TaskStatus
+from slate.domain import ApiKeyKind, ProjectStatus, TaskStatus
 
 
 class Model(BaseModel):
@@ -22,10 +22,32 @@ class Model(BaseModel):
 
 
 class UserOut(Model):
-    id: str
+    id: UUID
+    workspace_id: UUID
     name: str
     email: str | None
     via: str
+
+
+class ApiKeyIn(Model):
+    name: str = Field(min_length=1, max_length=120)
+    kind: ApiKeyKind = Field(
+        default=ApiKeyKind.REST,
+        description="rest works on /api; mcp is reserved for a future /mcp endpoint.",
+    )
+
+
+class ApiKeyOut(Model):
+    id: UUID
+    name: str
+    kind: ApiKeyKind
+    created_at: datetime
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class ApiKeyCreated(ApiKeyOut):
+    secret: str = Field(description="Shown once. Send as Authorization: Bearer <secret>.")
 
 
 class SettingsOut(Model):
@@ -60,8 +82,7 @@ class AreaPatch(Model):
 
 
 class AreaOut(Model):
-    id: int
-    uuid: UUID
+    id: UUID
     name: str
     color: str
     position: int
@@ -69,7 +90,7 @@ class AreaOut(Model):
 
 class ProjectIn(Model):
     name: str = Field(min_length=1, max_length=200)
-    area_id: int | None = None
+    area_id: UUID | None = None
     status: ProjectStatus = ProjectStatus.ACTIVE
     description: str = ""
     target_date: date | None = None
@@ -79,7 +100,7 @@ class ProjectIn(Model):
 
 class ProjectPatch(Model):
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    area_id: int | None = None
+    area_id: UUID | None = None
     status: ProjectStatus | None = None
     description: str | None = None
     target_date: date | None = None
@@ -88,10 +109,9 @@ class ProjectPatch(Model):
 
 
 class ProjectOut(Model):
-    id: int
-    uuid: UUID
+    id: UUID
     name: str
-    area_id: int | None
+    area_id: UUID | None
     status: ProjectStatus
     description: str
     target_date: date | None
@@ -115,8 +135,7 @@ class LabelPatch(Model):
 
 
 class LabelOut(Model):
-    id: int
-    uuid: UUID
+    id: UUID
     name: str
     color: str
 
@@ -129,10 +148,10 @@ class TaskIn(Model):
     description: str = ""
     status: TaskStatus = TaskStatus.TODO
     priority: int = Field(default=0, ge=0, le=4)
-    project_id: int | None = None
-    area_id: int | None = None
-    parent_id: int | None = None
-    label_ids: list[int] = []
+    project_id: UUID | None = None
+    area_id: UUID | None = None
+    parent_id: UUID | None = None
+    label_ids: list[UUID] = []
     due_date: date | None = None
     due_time: time | None = None
     due_string: str | None = Field(
@@ -147,10 +166,10 @@ class TaskPatch(Model):
     description: str | None = None
     status: TaskStatus | None = None
     priority: int | None = Field(default=None, ge=0, le=4)
-    project_id: int | None = None
-    area_id: int | None = None
-    parent_id: int | None = None
-    label_ids: list[int] | None = None
+    project_id: UUID | None = None
+    area_id: UUID | None = None
+    parent_id: UUID | None = None
+    label_ids: list[UUID] | None = None
     due_date: date | None = None
     due_time: time | None = None
     due_string: str | None = Field(
@@ -162,17 +181,18 @@ class TaskPatch(Model):
 
 
 class TaskOut(Model):
-    id: int
-    uuid: UUID
-    key: str
+    id: UUID
+    number: int
+    key: str = Field(description="SLT-<number>; task routes accept it as well as the id.")
+    parent_key: str | None = None
     title: str
     description: str
     status: TaskStatus
     priority: int
-    project_id: int | None
-    area_id: int | None
-    parent_id: int | None
-    label_ids: list[int]
+    project_id: UUID | None
+    area_id: UUID | None
+    parent_id: UUID | None
+    label_ids: list[UUID]
     due_date: date | None
     due_time: time | None
     recurrence: RecurrenceOut | None
@@ -199,17 +219,16 @@ class CommentIn(Model):
 
 
 class CommentOut(Model):
-    id: int
-    uuid: UUID
-    task_id: int
+    id: UUID
+    task_id: UUID
     body: str
     created_at: datetime
     updated_at: datetime
 
 
 class ActivityOut(Model):
-    id: int
-    task_id: int
+    id: UUID
+    task_id: UUID
     kind: str
     data: dict
     created_at: datetime
@@ -235,10 +254,10 @@ class ParseOut(Model):
     due_date: date | None
     due_time: time | None
     recurrence: RecurrenceOut | None
-    area_id: int | None
-    project_id: int | None
+    area_id: UUID | None
+    project_id: UUID | None
     unknown_project: str | None
-    label_ids: list[int]
+    label_ids: list[UUID]
     unknown_labels: list[str]
     priority: int | None
     status: str | None
@@ -252,16 +271,16 @@ class QuickAddIn(Model):
         description="Create an unknown #project or @label instead of dropping it.",
     )
     # Defaults applied when the text does not say otherwise, e.g. from the current view.
-    project_id: int | None = None
-    area_id: int | None = None
-    parent_id: int | None = None
+    project_id: UUID | None = None
+    area_id: UUID | None = None
+    parent_id: UUID | None = None
 
 
 # --- agenda ----------------------------------------------------------------------
 
 
 class GhostOut(Model):
-    task_id: int
+    task_id: UUID
     date: date
 
 

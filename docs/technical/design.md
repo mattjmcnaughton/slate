@@ -1,6 +1,6 @@
 # Slate technical design (v1)
 
-Slate is a single-user task manager that replaces Linear (areas, projects,
+Slate is a multi-user task manager that replaces Linear (areas, projects,
 status workflow, boards) and Todoist (daily and repeating tasks, natural-language
 quick add). Product scope: https://ampcode.com/artifacts/personal-task-manager-v1-scope-9596d145-01a4-41c3-a27a-c3e1c109be05
 
@@ -10,8 +10,12 @@ quick add). Product scope: https://ampcode.com/artifacts/personal-task-manager-v
 - **Project**: belongs to an area (optional). Status `planned | active | paused |
   done | canceled`, optional `target_date`, description. Progress counts
   non-repeating, non-canceled tasks: done / total.
-- **Task**: global integer id, shown as `SLT-<id>`; the id never changes when the
-  task moves. Belongs to a project, or directly to an area, or to neither (Inbox).
+- **Ids**: every record's id is a UUID (v7, so ids sort in creation order).
+  URLs and the API use only these; integer ids do not exist.
+- **Workspace**: owns every area, project, label, and task. Each user has exactly
+  one, created at first sign-in; nothing is shared across workspaces.
+- **Task**: also has a per-workspace `number`, shown as `SLT-<number>` (each
+  workspace starts at SLT-1); it never changes when the task moves. Belongs to a project, or directly to an area, or to neither (Inbox).
   Optional `parent_id` for subtasks, one level deep; subtasks cannot repeat.
   - `status`: `backlog | todo | in_progress | done | canceled`
   - `priority`: 0 none, 1 urgent, 2 high, 3 medium, 4 low (Linear's order)
@@ -21,8 +25,9 @@ quick add). Product scope: https://ampcode.com/artifacts/personal-task-manager-v
     and `completed_runs`
   - labels, comments, an activity log
   - `source` / `source_id`: where an imported record came from, unique together
+    within a workspace
 - **Label**: name and color.
-- **Settings**: one row; `timezone` (default `America/New_York`). All dates are
+- **Settings**: per workspace; `timezone` (default `America/New_York`). All dates are
   local to this zone. Timestamps (`created_at`, etc.) are stored in UTC.
 
 ## Repeating tasks
@@ -102,32 +107,47 @@ production the app runs migrations on startup.
 
 JSON under `/api`. Full schema at `/docs` (OpenAPI). Authentication: the browser
 uses a signed session cookie set after OIDC sign-in (Auth0); agents and scripts send
-`Authorization: Bearer <token>` with a token from `SLATE_API_TOKENS`.
+`Authorization: Bearer <key>` with an API key the user created in Settings. Every
+id in a path or body is a UUID; another workspace's id answers 404 like a missing one.
 
 | Method and path | Purpose |
 | --- | --- |
 | `GET /api/me` | Current user |
-| `GET/PATCH /api/settings` | Time zone |
+| `GET/PATCH /api/settings` | Time zone (PATCH needs a browser session) |
+| `GET/POST /api/api-keys`, `DELETE /api/api-keys/{id}` | The caller's API keys; browser session only |
 | `GET/POST /api/areas`, `PATCH/DELETE /api/areas/{id}` | Areas |
 | `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/{id}` | Projects, with progress |
 | `GET/POST /api/labels`, `PATCH/DELETE /api/labels/{id}` | Labels |
-| `GET /api/tasks` | Filter: `project_id`, `area_id`, `inbox`, `parent_id`, `status` (repeatable), `priority`, `label_id`, `due_before`, `due_after`, `q`, `include_closed`; sort: `sort=due\|priority\|created\|updated`, `order=asc\|desc` |
+| `GET /api/tasks` | Filter: `project_id`, `area_id`, `inbox`, `top_level`, `parent_id`, `status` (repeatable), `priority`, `label_id`, `due_before`, `due_after`, `q`, `include_closed`; sort: `sort=due\|priority\|created\|updated`, `order=asc\|desc` |
 | `POST /api/tasks` | Create from fields; `due_string` and `repeat_string` are parsed server-side |
 | `POST /api/tasks/quick-add` | Create from one natural-language line |
-| `GET/PATCH/DELETE /api/tasks/{ref}` | `ref` is `42` or `SLT-42` |
+| `GET/PATCH/DELETE /api/tasks/{ref}` | `ref` is the task's UUID or its key, such as `SLT-42` |
 | `POST /api/tasks/{ref}/complete`, `POST /api/tasks/{ref}/reopen` | Completion rolls repeating tasks forward |
 | `GET/POST /api/tasks/{ref}/comments`, `PATCH/DELETE /api/comments/{id}` | Comments |
 | `GET /api/tasks/{ref}/activity` | Activity log |
 | `GET /api/agenda?start=&end=` | Today/Upcoming: tasks by day, overdue first, with ghost runs |
 | `POST /api/parse` | Live quick-add preview: parsed fields and highlight tokens |
-| `POST /api/import` | Idempotent bulk upsert by `(source, source_id)` with original timestamps |
+| `POST /api/import` | Idempotent bulk upsert by `(source, source_id)` within the caller's workspace, with original timestamps |
 
 ## Users
 
-Sign-in upserts a row in `users` keyed by the provider's `(issuer, subject)`, so
-each person has a stable local id. Who may sign in is `SLATE_ALLOWED_EMAILS`
-(verified emails only). Tasks are not yet scoped per user: everyone allowed in
-shares one workspace.
+Sign-in upserts a row in `users` keyed by the provider's `(issuer, subject)`, and
+the first sign-in creates that user's workspace. An identity may sign in when its
+subject is in `SLATE_ALLOWED_USER_IDS` or its verified email is in
+`SLATE_ALLOWED_EMAILS`; a refused sign-in shows the subject to add. Matching an
+email never links a new identity to an existing account. Turn off sign-ups in
+Auth0 as well.
+
+Isolation is enforced twice: every repository query filters on the request's
+workspace, and every reference between owned rows is a composite foreign key on
+`(id, workspace_id)`, so the database refuses a link across workspaces.
+
+API keys (`api_keys`) belong to a user and act in that user's workspace. Only the
+SHA-256 digest is stored; the key is shown once. Each request re-checks the key,
+so revoking is immediate. A key's `kind` is `rest` (works on `/api`) or `mcp`
+(reserved for a future `/mcp` endpoint, refused by `/api`), so an agent given an
+MCP key cannot drop to REST around MCP-only rules. Keys cannot manage keys or
+change settings.
 
 ## Deployment
 
@@ -142,7 +162,7 @@ because Boxes do not guarantee a Python runtime. `.box/run.sh` sets
 | Database | Neon project `slate` (`dark-meadow-34017316`), database `slate`, role `slate_owner`. The app runs migrations at startup. |
 | Sign-in | Auth0 application `slate`, callbacks `https://slate.mattjmcnaughton.com/auth/callback` and `https://slate--mattjmcnaughton.onamp.dev/auth/callback`. |
 | Plain env (`.amp/box.yaml`) | `SLATE_AUTH=oidc`, `OIDC_ISSUER` (exactly as discovery reports it, with the trailing `/`), `SLATE_PUBLIC_URL`. |
-| Secrets | `DATABASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_SESSION_SECRET` (32+ chars), `SLATE_API_TOKENS`, `SLATE_ALLOWED_EMAILS` (comma-separated). Stored as `KEY='value'` lines in `secrets.env` in the deployment's data directory (copied with `amp boxes cp`, mode 600), which `.box/run.sh` loads; Amp deployment secrets work too. |
+| Secrets | `DATABASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `APP_SESSION_SECRET` (32+ chars), `SLATE_ALLOWED_USER_IDS` and `SLATE_ALLOWED_EMAILS` (comma-separated). Stored as `KEY='value'` lines in `secrets.env` in the deployment's data directory (copied with `amp boxes cp`, mode 600), which `.box/run.sh` loads; Amp deployment secrets work too. |
 
 Deploy pushed code with `amp boxes deploy --domain slate.mattjmcnaughton.com`.
 Check it with `curl -s https://slate.mattjmcnaughton.com/readyz` and confirm

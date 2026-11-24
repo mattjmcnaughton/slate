@@ -18,7 +18,7 @@ from slate.auth import (
     new_transaction,
 )
 from slate.deps import ContainerDep
-from slate.domain import Account
+from slate.services.accounts import is_admitted, sign_in
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -69,20 +69,19 @@ async def callback(
         identity = await container.oauth.exchange(code, tx)
     except OAuthError as e:
         raise HTTPException(400, f"Sign-in failed: {e}") from e
-    # Only verified emails count; the provider leaves email unset otherwise.
-    if not identity.email or identity.email.lower() not in container.allowed_emails:
-        raise HTTPException(403, f"{identity.email or identity.name} may not use this app")
+    if not is_admitted(identity, container.allowed_user_ids, container.allowed_emails):
+        # Shows the subject so the owner can add it to SLATE_ALLOWED_USER_IDS.
+        who = identity.email or identity.name
+        raise HTTPException(403, f"{who} ({identity.subject}) may not use this app")
     async with container.uow_factory() as uow:
-        account = await uow.users.record_sign_in(
-            Account(
-                issuer=identity.issuer,
-                subject=identity.subject,
-                name=identity.name,
-                email=identity.email,
-            )
-        )
+        signed = await sign_in(uow, identity)
         await uow.commit()
-    user = User(id=str(account.uuid), name=account.name, email=account.email)
+    user = User(
+        id=signed.account.id,
+        workspace_id=signed.workspace.id,
+        name=signed.account.name,
+        email=signed.account.email,
+    )
     auth = container.authenticator
     assert isinstance(auth, SessionAuthenticator)
     resp = RedirectResponse(tx.return_to, status_code=303)

@@ -9,6 +9,7 @@ export type Priority = 0 | 1 | 2 | 3 | 4;
 
 export interface User {
   id: string;
+  workspace_id: string;
   name: string;
   email: string | null;
   via: string;
@@ -27,8 +28,7 @@ export interface Recurrence {
 }
 
 export interface Area {
-  id: number;
-  uuid: string;
+  id: string;
   name: string;
   color: string;
   position: number;
@@ -41,10 +41,9 @@ export interface AreaIn {
 }
 
 export interface Project {
-  id: number;
-  uuid: string;
+  id: string;
   name: string;
-  area_id: number | null;
+  area_id: string | null;
   status: ProjectStatus;
   description: string;
   target_date: string | null;
@@ -59,7 +58,7 @@ export interface Project {
 
 export interface ProjectIn {
   name: string;
-  area_id?: number | null;
+  area_id?: string | null;
   status?: ProjectStatus;
   description?: string;
   target_date?: string | null;
@@ -70,24 +69,25 @@ export interface ProjectIn {
 export type ProjectPatch = Partial<ProjectIn>;
 
 export interface Label {
-  id: number;
-  uuid: string;
+  id: string;
   name: string;
   color: string;
 }
 
 export interface Task {
-  id: number;
-  uuid: string;
+  id: string;
+  number: number;
   key: string;
   title: string;
   description: string;
   status: TaskStatus;
   priority: Priority;
-  project_id: number | null;
-  area_id: number | null;
-  parent_id: number | null;
-  label_ids: number[];
+  project_id: string | null;
+  area_id: string | null;
+  parent_id: string | null;
+  /** SLT-<number> of the parent, for display. */
+  parent_key: string | null;
+  label_ids: string[];
   due_date: string | null;
   due_time: string | null;
   recurrence: Recurrence | null;
@@ -107,10 +107,10 @@ export interface TaskIn {
   description?: string;
   status?: TaskStatus;
   priority?: Priority;
-  project_id?: number | null;
-  area_id?: number | null;
-  parent_id?: number | null;
-  label_ids?: number[];
+  project_id?: string | null;
+  area_id?: string | null;
+  parent_id?: string | null;
+  label_ids?: string[];
   due_date?: string | null;
   due_time?: string | null;
   due_string?: string | null;
@@ -122,10 +122,10 @@ export interface TaskPatch {
   description?: string;
   status?: TaskStatus;
   priority?: Priority;
-  project_id?: number | null;
-  area_id?: number | null;
-  parent_id?: number | null;
-  label_ids?: number[];
+  project_id?: string | null;
+  area_id?: string | null;
+  parent_id?: string | null;
+  label_ids?: string[];
   due_date?: string | null;
   due_time?: string | null;
   due_string?: string;
@@ -138,9 +138,8 @@ export interface CompleteResult {
 }
 
 export interface Comment {
-  id: number;
-  uuid: string;
-  task_id: number;
+  id: string;
+  task_id: string;
   body: string;
   created_at: string;
   updated_at: string;
@@ -157,8 +156,8 @@ export type ActivityKind =
   | "imported";
 
 export interface Activity {
-  id: number;
-  task_id: number;
+  id: string;
+  task_id: string;
   kind: ActivityKind | string;
   data: Record<string, unknown>;
   created_at: string;
@@ -179,10 +178,10 @@ export interface ParseResult {
   due_date: string | null;
   due_time: string | null;
   recurrence: Recurrence | null;
-  area_id: number | null;
-  project_id: number | null;
+  area_id: string | null;
+  project_id: string | null;
   unknown_project: string | null;
-  label_ids: number[];
+  label_ids: string[];
   unknown_labels: string[];
   priority: number | null;
   status: TaskStatus | null;
@@ -192,13 +191,13 @@ export interface ParseResult {
 export interface QuickAddIn {
   text: string;
   create_missing?: boolean;
-  project_id?: number | null;
-  area_id?: number | null;
-  parent_id?: number | null;
+  project_id?: string | null;
+  area_id?: string | null;
+  parent_id?: string | null;
 }
 
 export interface Ghost {
-  task_id: number;
+  task_id: string;
   date: string;
 }
 
@@ -217,14 +216,15 @@ export interface Agenda {
 export type TaskSort = "due" | "priority" | "created" | "updated" | "position";
 
 export interface TaskQuery {
-  project_id?: number;
-  area_id?: number;
+  project_id?: string;
+  area_id?: string;
   inbox?: boolean;
-  /** 0 selects top-level tasks only. */
-  parent_id?: number;
+  /** Only tasks without a parent. */
+  top_level?: boolean;
+  parent_id?: string;
   status?: TaskStatus[];
   priority?: number[];
-  label_id?: number;
+  label_id?: string;
   due_before?: string;
   due_after?: string;
   has_due?: boolean;
@@ -234,6 +234,22 @@ export interface TaskQuery {
   sort?: TaskSort;
   order?: "asc" | "desc";
   limit?: number;
+}
+
+export type ApiKeyKind = "rest" | "mcp";
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  kind: ApiKeyKind;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+/** Returned once, at creation: `secret` is never shown again. */
+export interface ApiKeyCreated extends ApiKey {
+  secret: string;
 }
 
 export class ApiError extends Error {
@@ -306,7 +322,7 @@ const post = <T>(path: string, body?: unknown) => request<T>("POST", path, body 
 const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, body);
 const del = (path: string) => request<void>("DELETE", path);
 
-const ref = (r: number | string) => encodeURIComponent(String(r));
+const ref = (r: string) => encodeURIComponent(String(r));
 
 export const api = {
   me: () => get<User>("/api/me"),
@@ -315,35 +331,39 @@ export const api = {
 
   areas: () => get<Area[]>("/api/areas"),
   createArea: (body: AreaIn) => post<Area>("/api/areas", body),
-  patchArea: (id: number, body: Partial<AreaIn>) => patch<Area>(`/api/areas/${id}`, body),
-  deleteArea: (id: number) => del(`/api/areas/${id}`),
+  patchArea: (id: string, body: Partial<AreaIn>) => patch<Area>(`/api/areas/${id}`, body),
+  deleteArea: (id: string) => del(`/api/areas/${id}`),
 
-  projects: (areaId?: number) => get<Project[]>(`/api/projects${queryString({ area_id: areaId })}`),
-  project: (id: number) => get<Project>(`/api/projects/${id}`),
+  projects: (areaId?: string) => get<Project[]>(`/api/projects${queryString({ area_id: areaId })}`),
+  project: (id: string) => get<Project>(`/api/projects/${id}`),
   createProject: (body: ProjectIn) => post<Project>("/api/projects", body),
-  patchProject: (id: number, body: ProjectPatch) => patch<Project>(`/api/projects/${id}`, body),
-  deleteProject: (id: number) => del(`/api/projects/${id}`),
+  patchProject: (id: string, body: ProjectPatch) => patch<Project>(`/api/projects/${id}`, body),
+  deleteProject: (id: string) => del(`/api/projects/${id}`),
 
   labels: () => get<Label[]>("/api/labels"),
   createLabel: (body: { name: string; color?: string }) => post<Label>("/api/labels", body),
-  deleteLabel: (id: number) => del(`/api/labels/${id}`),
+  deleteLabel: (id: string) => del(`/api/labels/${id}`),
 
   tasks: (query: TaskQuery = {}) =>
     get<Task[]>(`/api/tasks${queryString(query as Record<string, QueryValue>)}`),
-  task: (r: number | string) => get<Task>(`/api/tasks/${ref(r)}`),
+  task: (r: string) => get<Task>(`/api/tasks/${ref(r)}`),
   createTask: (body: TaskIn) => post<Task>("/api/tasks", body),
   quickAdd: (body: QuickAddIn) => post<Task>("/api/tasks/quick-add", body),
-  patchTask: (r: number | string, body: TaskPatch) => patch<Task>(`/api/tasks/${ref(r)}`, body),
-  deleteTask: (r: number | string) => del(`/api/tasks/${ref(r)}`),
-  complete: (r: number | string) => post<CompleteResult>(`/api/tasks/${ref(r)}/complete`),
-  reopen: (r: number | string) => post<Task>(`/api/tasks/${ref(r)}/reopen`),
+  patchTask: (r: string, body: TaskPatch) => patch<Task>(`/api/tasks/${ref(r)}`, body),
+  deleteTask: (r: string) => del(`/api/tasks/${ref(r)}`),
+  complete: (r: string) => post<CompleteResult>(`/api/tasks/${ref(r)}/complete`),
+  reopen: (r: string) => post<Task>(`/api/tasks/${ref(r)}/reopen`),
 
-  comments: (r: number | string) => get<Comment[]>(`/api/tasks/${ref(r)}/comments`),
-  addComment: (r: number | string, body: string) =>
-    post<Comment>(`/api/tasks/${ref(r)}/comments`, { body }),
-  patchComment: (id: number, body: string) => patch<Comment>(`/api/comments/${id}`, { body }),
-  deleteComment: (id: number) => del(`/api/comments/${id}`),
-  activity: (r: number | string) => get<Activity[]>(`/api/tasks/${ref(r)}/activity`),
+  comments: (r: string) => get<Comment[]>(`/api/tasks/${ref(r)}/comments`),
+  addComment: (r: string, body: string) => post<Comment>(`/api/tasks/${ref(r)}/comments`, { body }),
+  patchComment: (id: string, body: string) => patch<Comment>(`/api/comments/${id}`, { body }),
+  deleteComment: (id: string) => del(`/api/comments/${id}`),
+  activity: (r: string) => get<Activity[]>(`/api/tasks/${ref(r)}/activity`),
+
+  apiKeys: () => get<ApiKey[]>("/api/api-keys"),
+  createApiKey: (body: { name: string; kind?: ApiKeyKind }) =>
+    post<ApiKeyCreated>("/api/api-keys", body),
+  revokeApiKey: (id: string) => del(`/api/api-keys/${id}`),
 
   agenda: (start?: string, end?: string) =>
     get<Agenda>(`/api/agenda${queryString({ start, end })}`),

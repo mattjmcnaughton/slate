@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt  # noqa: TC003
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 
 class RecurrenceMode(StrEnum):
@@ -73,7 +74,7 @@ class Token:
 class EntityRef:
     """An area, project, or label the parser may resolve "#name" / "@name" to."""
 
-    id: int
+    id: Any  # the caller's id type (Slate passes UUIDs); the parser only compares ids
     name: str
     # Extra names that also match, such as a slug ("side-projects").
     aliases: tuple[str, ...] = ()
@@ -122,10 +123,10 @@ class QuickAddResult:
     title: str
     due: Due | None = None
     recurrence: Recurrence | None = None
-    area_id: int | None = None
-    project_id: int | None = None
+    area_id: Any = None
+    project_id: Any = None
     unknown_project: str | None = None
-    label_ids: tuple[int, ...] = ()
+    label_ids: tuple[Any, ...] = ()
     unknown_labels: tuple[str, ...] = ()
     priority: int | None = None
     status: str | None = None

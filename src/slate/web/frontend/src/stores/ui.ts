@@ -4,7 +4,7 @@ export type MenuKind = "status" | "priority" | "labels" | "due" | "project";
 
 export interface MenuState {
   kind: MenuKind;
-  taskIds: number[];
+  taskIds: string[];
   /** Where to open; defaults to the selected row. */
   anchor?: { x: number; y: number };
 }
@@ -25,8 +25,8 @@ export interface ConfirmState {
 
 /** What the current page contributes to quick add and to page-level keys. */
 export interface PageContext {
-  projectId?: number | null;
-  areaId?: number | null;
+  projectId?: string | null;
+  areaId?: string | null;
   /** New tasks without a date get today's date (Today page). */
   dueToday?: boolean;
   toggleView?: () => void;
@@ -34,17 +34,17 @@ export interface PageContext {
 
 interface UIState {
   // Keyboard cursor and multi-select over the visible list.
-  visibleIds: number[];
-  selectedId: number | null;
-  checkedIds: number[];
-  setVisible: (ids: number[]) => void;
-  select: (id: number | null) => void;
+  visibleIds: string[];
+  selectedId: string | null;
+  checkedIds: string[];
+  setVisible: (ids: string[]) => void;
+  select: (id: string | null) => void;
   move: (delta: number) => void;
-  toggleChecked: (id: number) => void;
+  toggleChecked: (id: string) => void;
   clearChecked: () => void;
 
-  detailId: number | null;
-  openDetail: (id: number) => void;
+  detailId: string | null;
+  openDetail: (id: string) => void;
   closeDetail: () => void;
 
   palette: null | "commands" | "search";
@@ -143,7 +143,7 @@ export const useUI = create<UIState>((set, get) => ({
 }));
 
 /** The tasks a list command acts on: the checked set, else the selected row. */
-export function targetIds(): number[] {
+export function targetIds(): string[] {
   const { checkedIds, selectedId } = useUI.getState();
   if (checkedIds.length) return checkedIds;
   return selectedId === null ? [] : [selectedId];

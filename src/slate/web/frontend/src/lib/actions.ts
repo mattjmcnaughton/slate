@@ -12,16 +12,16 @@ export function useTaskActions() {
   const remove = useDeleteTask();
   const ui = useUI;
 
-  const isClosed = (id: number) => {
+  const isClosed = (id: string) => {
     const s = findTask(qc, id)?.status;
     return s === "done" || s === "canceled";
   };
 
   return {
-    patch: (ids: number[], body: TaskPatch) => {
+    patch: (ids: string[], body: TaskPatch) => {
       for (const id of ids) patch.mutate({ id, patch: body });
     },
-    toggleComplete: (ids: number[]) => {
+    toggleComplete: (ids: string[]) => {
       // Mixed selections complete everything first, like Linear.
       const allClosed = ids.every(isClosed);
       for (const id of ids) {
@@ -29,7 +29,7 @@ export function useTaskActions() {
         else if (!isClosed(id)) complete.mutate(id);
       }
     },
-    setStatus: (ids: number[], status: TaskStatus) => {
+    setStatus: (ids: string[], status: TaskStatus) => {
       for (const id of ids) {
         const t = findTask(qc, id);
         if (t?.status === status) continue;
@@ -41,7 +41,7 @@ export function useTaskActions() {
         }
       }
     },
-    confirmDelete: (ids: number[]) => {
+    confirmDelete: (ids: string[]) => {
       if (!ids.length) return;
       const first = findTask(qc, ids[0]);
       ui.getState().setConfirm({

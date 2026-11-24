@@ -41,7 +41,7 @@ export function tokenStyle(kind: string, unresolved: boolean): React.CSSProperti
 interface Props {
   variant: "inline" | "modal" | "subtask";
   /** Overrides the page defaults (used for subtasks). */
-  defaults?: { projectId?: number | null; areaId?: number | null; parentId?: number };
+  defaults?: { projectId?: string | null; areaId?: string | null; parentId?: string };
   onDone?: () => void;
   autoFocus?: boolean;
   placeholder?: string;

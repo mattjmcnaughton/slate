@@ -43,7 +43,7 @@ function Md({ children }: { children: string }) {
   );
 }
 
-export function TaskDetail({ id, phone }: { id: number; phone: boolean }) {
+export function TaskDetail({ id, phone }: { id: string; phone: boolean }) {
   const { data: task, isError } = useTask(id);
   const close = () => useUI.getState().closeDetail();
 
@@ -67,9 +67,9 @@ export function TaskDetail({ id, phone }: { id: number; phone: boolean }) {
           <button
             type="button"
             className="text-[12.5px] text-ink3 hover:text-accent"
-            onClick={() => useUI.getState().openDetail(task.parent_id as number)}
+            onClick={() => useUI.getState().openDetail(task.parent_id as string)}
           >
-            subtask of SLT-{task.parent_id}
+            subtask of {task.parent_key}
           </button>
         )}
         <span className="flex-1" />
@@ -484,7 +484,8 @@ function Timeline({ task }: { task: Task }) {
       Date.parse(a.at) - Date.parse(b.at) ||
       // Same instant: activity before comments, each in creation order.
       Number(Boolean(a.comment)) - Number(Boolean(b.comment)) ||
-      (a.activity?.id ?? a.comment?.id ?? 0) - (b.activity?.id ?? b.comment?.id ?? 0),
+      // Ids are UUIDv7, so comparing them as strings is creation order.
+      (a.activity?.id ?? a.comment?.id ?? "").localeCompare(b.activity?.id ?? b.comment?.id ?? ""),
   );
 
   const submit = () => {
@@ -547,7 +548,7 @@ function Timeline({ task }: { task: Task }) {
   );
 }
 
-function CommentItem({ comment, taskId }: { comment: Comment; taskId: number }) {
+function CommentItem({ comment, taskId }: { comment: Comment; taskId: string }) {
   const { edit, remove } = useCommentMutations(taskId);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(comment.body);

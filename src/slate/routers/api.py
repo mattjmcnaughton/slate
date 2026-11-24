@@ -5,16 +5,20 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import date, timedelta
 from typing import Annotated, Any
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from slate.deps import ServiceDep, UserDep
+from slate.deps import BrowserUserDep, ContainerDep, ServiceDep, UserDep
 from slate.domain import Area, Label, Project, Task, TaskFilter, TaskStatus, task_key
 from slate.dtos import (
     ActivityOut,
     AgendaDayOut,
     AgendaOut,
+    ApiKeyCreated,
+    ApiKeyIn,
+    ApiKeyOut,
     AreaIn,
     AreaOut,
     AreaPatch,
@@ -43,6 +47,7 @@ from slate.dtos import (
     UserOut,
 )
 from slate.repositories.base import NotFoundError
+from slate.services.accounts import issue_key, revoke_key
 from slate.services.agenda import build_agenda, project_progress
 from slate.services.importer import (
     ImportArea,
@@ -70,22 +75,26 @@ def _rec(rec) -> RecurrenceOut | None:  # noqa: ANN001
 
 
 async def present_tasks(svc: TaskService, tasks: list[Task]) -> list[TaskOut]:
-    ids = [t.id for t in tasks if t.id is not None]
+    ids = [t.id for t in tasks]
     comments = await svc.uow.comments.count_by_task(ids)
     children = await svc.uow.tasks.list(TaskFilter(include_closed=True, has_due=None))
-    subs: dict[int, list[Task]] = {}
+    subs: dict[UUID, list[Task]] = {}
+    numbers = {c.id: c.number for c in children}
     for c in children:
         if c.parent_id is not None:
             subs.setdefault(c.parent_id, []).append(c)
     out = []
     for t in tasks:
-        kids = subs.get(t.id, [])  # type: ignore[arg-type]
+        kids = subs.get(t.id, [])
         out.append(
             TaskOut(
                 **{k: v for k, v in asdict(t).items() if k not in ("recurrence",)},
-                key=task_key(t.id),  # type: ignore[arg-type]
+                key=task_key(t.number),  # type: ignore[arg-type]
+                parent_key=task_key(numbers[t.parent_id])  # type: ignore[arg-type]
+                if t.parent_id in numbers
+                else None,
                 recurrence=_rec(t.recurrence),
-                comment_count=comments.get(t.id, 0),  # type: ignore[arg-type]
+                comment_count=comments.get(t.id, 0),
                 subtask_count=len(kids),
                 open_subtask_count=sum(1 for k in kids if not k.is_closed),
             )
@@ -111,7 +120,13 @@ async def _not_found(fn, *a, **kw) -> Any:  # noqa: ANN001
 
 @router.get("/me", response_model=UserOut)
 async def me(user: UserDep) -> UserOut:
-    return UserOut(id=user.id, name=user.name, email=user.email, via=user.via)
+    return UserOut(
+        id=user.id,
+        workspace_id=user.workspace_id,
+        name=user.name,
+        email=user.email,
+        via=user.via,
+    )
 
 
 @router.get("/settings", response_model=SettingsOut)
@@ -120,7 +135,7 @@ async def get_settings(svc: ServiceDep) -> SettingsOut:
 
 
 @router.patch("/settings", response_model=SettingsOut)
-async def patch_settings(body: SettingsPatch, svc: ServiceDep) -> SettingsOut:
+async def patch_settings(body: SettingsPatch, svc: ServiceDep, _: BrowserUserDep) -> SettingsOut:
     try:
         ZoneInfo(body.timezone)
     except (ZoneInfoNotFoundError, ValueError) as e:
@@ -129,6 +144,29 @@ async def patch_settings(body: SettingsPatch, svc: ServiceDep) -> SettingsOut:
     s.timezone = body.timezone
     await svc.uow.settings.save(s)
     return SettingsOut(timezone=s.timezone)
+
+
+# --- API keys (browser session only) ---------------------------------------------------
+
+
+@router.get("/api-keys", response_model=list[ApiKeyOut])
+async def list_api_keys(svc: ServiceDep, user: BrowserUserDep) -> list:
+    return await svc.uow.api_keys.list_for_user(user.id)
+
+
+@router.post("/api-keys", response_model=ApiKeyCreated, status_code=201)
+async def create_api_key(body: ApiKeyIn, svc: ServiceDep, user: BrowserUserDep) -> ApiKeyCreated:
+    issued = await issue_key(svc.uow, user.id, user.workspace_id, body.name, body.kind)
+    return ApiKeyCreated(**asdict(issued.key), secret=issued.secret)
+
+
+@router.delete("/api-keys/{key_id}", status_code=204)
+async def revoke_api_key(
+    key_id: UUID, svc: ServiceDep, user: BrowserUserDep, container: ContainerDep
+) -> Response:
+    if not await revoke_key(svc.uow, user.id, key_id, container.clock):
+        raise HTTPException(404, "API key not found")
+    return Response(status_code=204)
 
 
 # --- areas ---------------------------------------------------------------------------
@@ -145,7 +183,7 @@ async def create_area(body: AreaIn, svc: ServiceDep) -> Area:
 
 
 @router.patch("/areas/{area_id}", response_model=AreaOut)
-async def patch_area(area_id: int, body: AreaPatch, svc: ServiceDep) -> Area:
+async def patch_area(area_id: UUID, body: AreaPatch, svc: ServiceDep) -> Area:
     area = await svc.uow.areas.get(area_id)
     if area is None:
         raise HTTPException(404, "area not found")
@@ -156,7 +194,7 @@ async def patch_area(area_id: int, body: AreaPatch, svc: ServiceDep) -> Area:
 
 
 @router.delete("/areas/{area_id}", status_code=204)
-async def delete_area(area_id: int, svc: ServiceDep) -> Response:
+async def delete_area(area_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.areas.delete, area_id)
     return Response(status_code=204)
 
@@ -167,23 +205,23 @@ async def delete_area(area_id: int, svc: ServiceDep) -> Response:
 async def _present_projects(svc: TaskService, projects: list[Project]) -> list[ProjectOut]:
     progress = await project_progress(svc.uow, projects)
     open_tasks = await svc.uow.tasks.list(TaskFilter())
-    counts: dict[int, int] = {}
+    counts: dict[UUID, int] = {}
     for t in open_tasks:
         if t.project_id is not None:
             counts[t.project_id] = counts.get(t.project_id, 0) + 1
     return [
         ProjectOut(
             **asdict(p),
-            progress_done=progress[p.id].done,  # type: ignore[index]
-            progress_total=progress[p.id].total,  # type: ignore[index]
-            open_count=counts.get(p.id, 0),  # type: ignore[arg-type]
+            progress_done=progress[p.id].done,
+            progress_total=progress[p.id].total,
+            open_count=counts.get(p.id, 0),
         )
         for p in projects
     ]
 
 
 @router.get("/projects", response_model=list[ProjectOut])
-async def list_projects(svc: ServiceDep, area_id: int | None = None) -> list[ProjectOut]:
+async def list_projects(svc: ServiceDep, area_id: UUID | None = None) -> list[ProjectOut]:
     return await _present_projects(svc, await svc.uow.projects.list(area_id))
 
 
@@ -196,7 +234,7 @@ async def create_project(body: ProjectIn, svc: ServiceDep) -> ProjectOut:
 
 
 @router.get("/projects/{project_id}", response_model=ProjectOut)
-async def get_project(project_id: int, svc: ServiceDep) -> ProjectOut:
+async def get_project(project_id: UUID, svc: ServiceDep) -> ProjectOut:
     p = await svc.uow.projects.get(project_id)
     if p is None:
         raise HTTPException(404, "project not found")
@@ -204,10 +242,12 @@ async def get_project(project_id: int, svc: ServiceDep) -> ProjectOut:
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectOut)
-async def patch_project(project_id: int, body: ProjectPatch, svc: ServiceDep) -> ProjectOut:
+async def patch_project(project_id: UUID, body: ProjectPatch, svc: ServiceDep) -> ProjectOut:
     p = await svc.uow.projects.get(project_id)
     if p is None:
         raise HTTPException(404, "project not found")
+    if body.area_id is not None and await svc.uow.areas.get(body.area_id) is None:
+        raise HTTPException(422, "Unknown area")
     nullable = {"area_id", "target_date", "color"}
     for k in body.model_fields_set:
         v = getattr(body, k)
@@ -218,7 +258,7 @@ async def patch_project(project_id: int, body: ProjectPatch, svc: ServiceDep) ->
 
 
 @router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(project_id: int, svc: ServiceDep) -> Response:
+async def delete_project(project_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.projects.delete, project_id)
     return Response(status_code=204)
 
@@ -237,7 +277,7 @@ async def create_label(body: LabelIn, svc: ServiceDep) -> Label:
 
 
 @router.patch("/labels/{label_id}", response_model=LabelOut)
-async def patch_label(label_id: int, body: LabelPatch, svc: ServiceDep) -> Label:
+async def patch_label(label_id: UUID, body: LabelPatch, svc: ServiceDep) -> Label:
     lb = await svc.uow.labels.get(label_id)
     if lb is None:
         raise HTTPException(404, "label not found")
@@ -248,7 +288,7 @@ async def patch_label(label_id: int, body: LabelPatch, svc: ServiceDep) -> Label
 
 
 @router.delete("/labels/{label_id}", status_code=204)
-async def delete_label(label_id: int, svc: ServiceDep) -> Response:
+async def delete_label(label_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.labels.delete, label_id)
     return Response(status_code=204)
 
@@ -259,13 +299,14 @@ async def delete_label(label_id: int, svc: ServiceDep) -> Response:
 @router.get("/tasks", response_model=list[TaskOut])
 async def list_tasks(
     svc: ServiceDep,
-    project_id: int | None = None,
-    area_id: int | None = None,
+    project_id: UUID | None = None,
+    area_id: UUID | None = None,
     inbox: bool = False,
-    parent_id: Annotated[int | None, Query(description="0 for top-level tasks only")] = None,
+    parent_id: UUID | None = None,
+    top_level: Annotated[bool, Query(description="Only tasks without a parent")] = False,
     status: Annotated[list[TaskStatus] | None, Query()] = None,
     priority: Annotated[list[int] | None, Query()] = None,
-    label_id: int | None = None,
+    label_id: UUID | None = None,
     due_before: date | None = None,
     due_after: date | None = None,
     has_due: bool | None = None,
@@ -280,6 +321,7 @@ async def list_tasks(
         project_id=project_id,
         area_id=area_id,
         inbox=inbox,
+        top_level=top_level,
         parent_id=parent_id,
         statuses=tuple(status or ()),
         priorities=tuple(priority or ()),
@@ -333,7 +375,7 @@ async def quick_add(body: QuickAddIn, svc: ServiceDep) -> TaskOut:
             p = await svc.uow.projects.add(Project(name=r.unknown_project))
             project_id, area_id = p.id, None
         for name in r.unknown_labels:
-            label_ids.append((await svc.uow.labels.add(Label(name=name))).id)  # type: ignore[arg-type]
+            label_ids.append((await svc.uow.labels.add(Label(name=name))).id)
     task = Task(
         title=r.title,
         status=TaskStatus(r.status) if r.status else TaskStatus.TODO,
@@ -407,7 +449,7 @@ async def add_comment(ref: str, body: CommentIn, svc: ServiceDep):  # noqa: ANN2
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentOut)
-async def patch_comment(comment_id: int, body: CommentIn, svc: ServiceDep):  # noqa: ANN201
+async def patch_comment(comment_id: UUID, body: CommentIn, svc: ServiceDep):  # noqa: ANN201
     c = await svc.uow.comments.get(comment_id)
     if c is None:
         raise HTTPException(404, "comment not found")
@@ -416,7 +458,7 @@ async def patch_comment(comment_id: int, body: CommentIn, svc: ServiceDep):  # n
 
 
 @router.delete("/comments/{comment_id}", status_code=204)
-async def delete_comment(comment_id: int, svc: ServiceDep) -> Response:
+async def delete_comment(comment_id: UUID, svc: ServiceDep) -> Response:
     await _not_found(svc.uow.comments.delete, comment_id)
     return Response(status_code=204)
 
@@ -449,7 +491,7 @@ async def agenda(
             AgendaDayOut(
                 date=d.date,
                 tasks=await present_tasks(svc, d.tasks),
-                ghosts=[GhostOut(task_id=g.task.id, date=g.date) for g in d.ghosts],  # type: ignore[arg-type]
+                ghosts=[GhostOut(task_id=g.task.id, date=g.date) for g in d.ghosts],
             )
             for d in ag.days
         ],
@@ -485,7 +527,7 @@ async def parse(body: ParseIn, svc: ServiceDep) -> ParseOut:
 
 @router.post("/import", response_model=ImportOut)
 async def import_batch(body: ImportIn, svc: ServiceDep) -> ImportOut:
-    """Idempotent bulk upsert keyed by (source, source_id). Safe to re-run."""
+    """Idempotent bulk upsert keyed by (source, source_id) within your workspace. Safe to re-run."""
     batch = ImportBatch(
         source=body.source,
         areas=[ImportArea(**a.model_dump()) for a in body.areas],

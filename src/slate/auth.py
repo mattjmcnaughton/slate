@@ -2,27 +2,29 @@
 
 Pieces, all injected through the container:
 
-- ``Authenticator`` resolves the request's user, or None.
-  - ``DevAuthenticator``: always the same fake user (local development).
+- ``Authenticator`` resolves the request's browser user, or None.
+  - ``DevAuthenticator``: always the same dev user (local development).
   - ``SessionAuthenticator``: a signed session cookie set after OIDC sign-in.
-  Both also accept ``Authorization: Bearer <token>`` for tokens in SLATE_API_TOKENS.
+  Bearer API keys are checked in ``deps.get_user`` against the database
+  (``services/accounts.py``), not here.
 - ``OAuthProvider`` does the network half of OAuth.
   - ``OIDCProvider``: any OIDC issuer (Auth0) with PKCE and a verified RS256 ID token.
   - ``FakeOAuthProvider`` (tests): returns a fixed identity for any code.
 
 Access tokens are not kept. Sign-in upserts a row in ``users`` keyed by the
-provider's (issuer, subject); the session holds that row's id, name, and email.
+provider's (issuer, subject); the session holds that user's id, workspace id,
+name, and email.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import secrets
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlencode
+from uuid import UUID
 
 import httpx
 import jwt
@@ -39,63 +41,70 @@ OAUTH_MAX_AGE = 10 * 60
 
 @dataclass(frozen=True)
 class User:
-    id: str
+    """The signed-in person and the workspace every request of theirs acts in."""
+
+    id: UUID
+    workspace_id: UUID
     name: str
     email: str | None = None
-    via: str = "session"  # session | token | dev
+    via: str = "session"  # session | key | dev
+    key_kind: str | None = None  # rest | mcp, when via == "key"
 
 
-DEV_USER = User(id="user_dev", name="Dev User", email="dev@example.com", via="dev")
-
-
-def _bearer(request: Request) -> str | None:
+def bearer(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
     return token.strip() if scheme.lower() == "bearer" and token.strip() else None
-
-
-def _token_user(request: Request, tokens: frozenset[str]) -> User | None:
-    token = _bearer(request)
-    if token and any(hmac.compare_digest(token, t) for t in tokens):
-        return User(id="api", name="API client", via="token")
-    return None
 
 
 class Authenticator(Protocol):
     async def authenticate(self, request: Request) -> User | None: ...
 
 
-class DevAuthenticator:
-    """Every request is ``user``: local development only."""
+DEV_IDENTITY_ISSUER = "dev"
 
-    def __init__(self, api_tokens: frozenset[str] = frozenset(), user: User = DEV_USER) -> None:
-        self.api_tokens = api_tokens
-        self.user = user
+
+class DevAuthenticator:
+    """Every request is the dev user: local development only.
+
+    ``user`` is set at startup, once the dev account and workspace exist.
+    """
+
+    def __init__(self) -> None:
+        self.user: User | None = None
 
     async def authenticate(self, request: Request) -> User | None:
-        return _token_user(request, self.api_tokens) or self.user
+        return self.user
 
 
 class SessionAuthenticator:
-    def __init__(self, signer: URLSafeTimedSerializer, api_tokens: frozenset[str]) -> None:
+    def __init__(self, signer: URLSafeTimedSerializer) -> None:
         self.signer = signer
-        self.api_tokens = api_tokens
 
     async def authenticate(self, request: Request) -> User | None:
-        if user := _token_user(request, self.api_tokens):
-            return user
         raw = request.cookies.get(SESSION_COOKIE)
         if not raw:
             return None
         try:
             data = self.signer.loads(raw, max_age=SESSION_MAX_AGE, salt="session")
-        except BadSignature:
-            return None
-        return User(id=data["id"], name=data["name"], email=data.get("email"))
+            return User(
+                id=UUID(data["id"]),
+                workspace_id=UUID(data["ws"]),
+                name=data["name"],
+                email=data.get("email"),
+            )
+        except (BadSignature, KeyError, ValueError, TypeError):
+            return None  # includes cookies from before workspaces existed
 
     def session_cookie(self, user: User) -> str:
         return self.signer.dumps(
-            {"id": user.id, "name": user.name, "email": user.email}, salt="session"
+            {
+                "id": str(user.id),
+                "ws": str(user.workspace_id),
+                "name": user.name,
+                "email": user.email,
+            },
+            salt="session",
         )
 
 

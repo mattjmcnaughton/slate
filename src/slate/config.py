@@ -39,9 +39,11 @@ class Settings(BaseSettings):
     # Freeze the clock for reproducible dev data, such as 2026-11-21T09:00:00-05:00.
     slate_fixed_now: str | None = None
 
-    # Comma-separated bearer tokens for API clients and agents.
-    slate_api_tokens: str = ""
-    # Comma-separated verified emails allowed to sign in. Empty allows nobody.
+    # Who may sign in: an identity whose subject (Auth0 user id, such as
+    # "google-oauth2|123") is in SLATE_ALLOWED_USER_IDS, or whose verified email
+    # is in SLATE_ALLOWED_EMAILS. Both comma-separated; both empty allows nobody.
+    # API keys are per user and created in Settings, not configured here.
+    slate_allowed_user_ids: str = ""
     slate_allowed_emails: str = ""
 
     # Exactly as the provider's discovery document reports it (Auth0 ends with "/").
@@ -56,8 +58,8 @@ class Settings(BaseSettings):
     app_session_secret: str = ""
 
     @property
-    def api_tokens(self) -> frozenset[str]:
-        return frozenset(t.strip() for t in self.slate_api_tokens.split(",") if t.strip())
+    def allowed_user_ids(self) -> frozenset[str]:
+        return frozenset(u.strip() for u in self.slate_allowed_user_ids.split(",") if u.strip())
 
     @property
     def allowed_emails(self) -> frozenset[str]:

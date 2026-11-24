@@ -27,7 +27,7 @@ export function LabelChips({
   ids,
   lookups,
   max = 3,
-}: { ids: number[]; lookups: Lookups; max?: number }) {
+}: { ids: string[]; lookups: Lookups; max?: number }) {
   if (!ids.length) return null;
   const labels = ids.map((id) => lookups.labels.get(id)).filter((l) => l !== undefined);
   return (

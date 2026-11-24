@@ -22,18 +22,18 @@ function value(field: string, v: unknown, lookups: Lookups): string | null {
     case "priority":
       return PRIORITY[Number(s)] ?? s;
     case "project_id":
-      return lookups.projects.get(Number(s))?.name ?? `project ${s}`;
+      return lookups.projects.get(s)?.name ?? `project ${s}`;
     case "area_id":
-      return lookups.areas.get(Number(s))?.name ?? `area ${s}`;
+      return lookups.areas.get(s)?.name ?? `area ${s}`;
     case "parent_id":
-      return `SLT-${s}`;
+      return "another task";
     case "due_date":
       return formatShort(s);
     case "due_time":
       return formatTime(s);
     case "label_ids":
       return Array.isArray(v)
-        ? v.map((id) => lookups.labels.get(Number(id))?.name ?? `#${id}`).join(", ") || null
+        ? v.map((id) => lookups.labels.get(String(id))?.name ?? `#${id}`).join(", ") || null
         : s;
     default:
       return s;

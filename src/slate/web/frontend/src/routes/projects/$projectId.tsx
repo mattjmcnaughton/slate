@@ -11,7 +11,7 @@ import {
 import { ProgressBar } from "../../components/TaskMeta";
 import { Dot, IconBoard, IconList, IconRepeat, IconTrash, STATUSES } from "../../components/icons";
 import { diffDays, formatShort } from "../../lib/dates";
-import { useDeleteProject, useLookups, useTasks, useToday } from "../../lib/queries";
+import { useDeleteProject, useLookups, useProjects, useTasks, useToday } from "../../lib/queries";
 import { useUI } from "../../stores/ui";
 
 type View = "list" | "board";
@@ -36,8 +36,9 @@ function ProjectPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const lookups = useLookups();
   const today = useToday();
-  const project = lookups.projectsByUuid.get(projectId);
-  const id = project?.id ?? -1;
+  const project = lookups.projects.get(projectId);
+  const loaded = useProjects().isSuccess;
+  const id = project?.id ?? "";
   const area = project?.area_id ? lookups.areas.get(project.area_id) : undefined;
   const remove = useDeleteProject();
   const confirmDelete = () => {
@@ -58,12 +59,10 @@ function ProjectPage() {
         }),
     });
   };
-  const { data: tasks } = useTasks({
-    project_id: id,
-    parent_id: 0,
-    include_closed: true,
-    sort: "due",
-  });
+  const { data: tasks } = useTasks(
+    { project_id: id, top_level: true, include_closed: true, sort: "due" },
+    Boolean(project),
+  );
 
   const setView = (v: View) =>
     navigate({ search: v === "board" ? { view: "board" } : {}, replace: true });
@@ -73,7 +72,7 @@ function ProjectPage() {
   );
 
   if (!project) {
-    return lookups.projects.size ? <Empty title="This project does not exist" /> : null;
+    return loaded ? <Empty title="This project does not exist" /> : null;
   }
 
   const target = project.target_date;

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/inbox")({
 });
 
 function Inbox() {
-  const { data } = useTasks({ inbox: true, parent_id: 0, sort: "created", order: "desc" });
+  const { data } = useTasks({ inbox: true, top_level: true, sort: "created", order: "desc" });
   usePageContext({ projectId: null, areaId: null }, []);
   return (
     <div className="mx-auto max-w-[920px]">

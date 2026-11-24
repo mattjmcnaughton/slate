@@ -23,11 +23,11 @@ type DuePreset = "overdue" | "today" | "week" | "month" | "none" | "custom";
 
 interface Search {
   q?: string;
-  area?: number;
-  project?: number;
+  area?: string;
+  project?: string;
   status?: TaskStatus[];
   priority?: number;
-  label?: number;
+  label?: string;
   due?: DuePreset;
   from?: string;
   to?: string;
@@ -38,6 +38,8 @@ interface Search {
 const STATUS_VALUES = STATUSES.map((s) => s.value);
 const num = (v: unknown) =>
   v === undefined || v === "" || Number.isNaN(Number(v)) ? undefined : Number(v);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid = (v: unknown) => (typeof v === "string" && UUID_RE.test(v) ? v : undefined);
 const isoDate = (v: unknown) =>
   typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
 
@@ -56,11 +58,11 @@ export const Route = createFileRoute("/all")({
       : undefined;
     return {
       q: typeof s.q === "string" && s.q ? s.q : undefined,
-      area: num(s.area),
-      project: num(s.project),
+      area: uuid(s.area),
+      project: uuid(s.project),
       status: status.length ? status : undefined,
       priority: num(s.priority),
-      label: num(s.label),
+      label: uuid(s.label),
       due,
       from: due === "custom" ? isoDate(s.from) : undefined,
       to: due === "custom" ? isoDate(s.to) : undefined,
@@ -173,7 +175,7 @@ function AllTasks() {
         <select
           aria-label="Area"
           value={search.area ?? ""}
-          onChange={(e) => set({ area: num(e.target.value), project: undefined })}
+          onChange={(e) => set({ area: uuid(e.target.value), project: undefined })}
           className={`${selectCls} ${search.area ? activeCls : ""}`}
         >
           <option value="">Any area</option>
@@ -186,7 +188,7 @@ function AllTasks() {
         <select
           aria-label="Project"
           value={search.project ?? ""}
-          onChange={(e) => set({ project: num(e.target.value) })}
+          onChange={(e) => set({ project: uuid(e.target.value) })}
           className={`${selectCls} ${search.project ? activeCls : ""}`}
         >
           <option value="">Any project</option>
@@ -236,7 +238,7 @@ function AllTasks() {
         <select
           aria-label="Label"
           value={search.label ?? ""}
-          onChange={(e) => set({ label: num(e.target.value) })}
+          onChange={(e) => set({ label: uuid(e.target.value) })}
           className={`${selectCls} ${search.label ? activeCls : ""}`}
         >
           <option value="">Any label</option>

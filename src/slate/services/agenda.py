@@ -10,6 +10,8 @@ from slate.domain import Project, Task, TaskFilter, TaskStatus
 from slate.scheduling import occurrences
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from slate.repositories.base import UnitOfWork
 
 
@@ -68,10 +70,10 @@ class Progress:
     total: int
 
 
-async def project_progress(uow: UnitOfWork, projects: list[Project]) -> dict[int, Progress]:
+async def project_progress(uow: UnitOfWork, projects: list[Project]) -> dict[UUID, Progress]:
     """done / total of non-repeating, non-canceled, top-level-or-sub tasks."""
     tasks = await uow.tasks.list(TaskFilter(include_closed=True, recurring=False))
-    out = {p.id: Progress(0, 0) for p in projects if p.id is not None}
+    out = {p.id: Progress(0, 0) for p in projects}
     for t in tasks:
         if t.project_id in out and t.status != TaskStatus.CANCELED:
             out[t.project_id].total += 1

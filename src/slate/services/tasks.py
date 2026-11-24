@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from slate.domain import (
@@ -37,16 +38,25 @@ class ValidationError(ValueError):
     """A request that breaks a domain rule; routers turn it into HTTP 422."""
 
 
-def parse_task_ref(ref: str | int) -> int:
-    s = str(ref).strip().upper()
-    if s.startswith("SLT-"):
-        s = s[4:]
-    if not s.isdigit():
-        raise NotFoundError(f"task {ref}")
-    return int(s)
+TaskRef = UUID | str
+
+
+def parse_task_ref(ref: TaskRef) -> UUID | int:
+    """A task's id (UUID) or its per-workspace number from a key such as "SLT-12"."""
+    if isinstance(ref, UUID):
+        return ref
+    s = ref.strip()
+    if s.upper().startswith("SLT-") and s[4:].isdigit():
+        return int(s[4:])
+    try:
+        return UUID(s)
+    except ValueError:
+        raise NotFoundError(f"task {ref}") from None
 
 
 def _jsonable(v: Any) -> Any:
+    if isinstance(v, UUID):
+        return str(v)
     if isinstance(v, date | time | datetime):
         return v.isoformat()
     if isinstance(v, Recurrence):
@@ -107,8 +117,10 @@ class TaskService:
 
     # --- reads --------------------------------------------------------------
 
-    async def get(self, ref: str | int) -> Task:
-        task = await self.uow.tasks.get(parse_task_ref(ref))
+    async def get(self, ref: TaskRef) -> Task:
+        key = parse_task_ref(ref)
+        tasks = self.uow.tasks
+        task = await (tasks.get(key) if isinstance(key, UUID) else tasks.get_by_number(key))
         if task is None:
             raise NotFoundError(f"task {ref}")
         return task
@@ -145,7 +157,7 @@ class TaskService:
             if t.recurrence is not None:
                 raise ValidationError("Subtasks cannot repeat")
 
-    async def _log(self, task_id: int, kind: str, data: dict | None = None, at=None) -> None:
+    async def _log(self, task_id: UUID, kind: str, data: dict | None = None, at=None) -> None:
         await self.uow.activity.add(
             Activity(task_id=task_id, kind=kind, data=data or {}, created_at=at)
         )
@@ -159,10 +171,10 @@ class TaskService:
         if task.status in CLOSED_STATUSES and task.completed_at is None:
             task.completed_at = self.clock.now()
         created = await self.uow.tasks.add(task)
-        await self._log(created.id, log_kind, at=created.created_at)  # type: ignore[arg-type]
+        await self._log(created.id, log_kind, at=created.created_at)
         return created
 
-    async def update(self, ref: str | int, changes: dict[str, Any]) -> Task:
+    async def update(self, ref: TaskRef, changes: dict[str, Any]) -> Task:
         """Apply ``changes`` (field name -> new value) and log what changed.
 
         A new ``due_date`` on a repeating task moves only this run: the rule is
@@ -188,13 +200,13 @@ class TaskService:
             if old != new:
                 kind = "status" if field == "status" else "updated"
                 await self._log(
-                    saved.id,  # type: ignore[arg-type]
+                    saved.id,
                     kind,
                     {"field": field, "from": _jsonable(old), "to": _jsonable(new)},
                 )
         return saved
 
-    async def complete(self, ref: str | int) -> Task:
+    async def complete(self, ref: TaskRef) -> Task:
         """Complete a task, or one run of a repeating task.
 
         A repeating task rolls forward to its next date and stays open. When
@@ -215,7 +227,7 @@ class TaskService:
             completed_runs=runs,
         )
         await self._log(
-            task.id,  # type: ignore[arg-type]
+            task.id,
             "completed_run",
             {"due": _jsonable(task.due_date), "next": _jsonable(nxt)},
         )
@@ -233,33 +245,31 @@ class TaskService:
         task.status = status
         task.completed_at = self.clock.now()
         saved = await self.uow.tasks.update(task)
-        await self._log(saved.id, kind, {"from": str(prev)})  # type: ignore[arg-type]
+        await self._log(saved.id, kind, {"from": str(prev)})
         return saved
 
-    async def reopen(self, ref: str | int) -> Task:
+    async def reopen(self, ref: TaskRef) -> Task:
         task = await self.get(ref)
         if not task.is_closed:
             return task
         task.status = TaskStatus.TODO
         task.completed_at = None
         saved = await self.uow.tasks.update(task)
-        await self._log(saved.id, "reopened")  # type: ignore[arg-type]
+        await self._log(saved.id, "reopened")
         return saved
 
-    async def open_subtasks(self, task_id: int) -> int:
+    async def open_subtasks(self, task_id: UUID) -> int:
         return len(await self.uow.tasks.list(TaskFilter(parent_id=task_id)))
 
-    async def delete(self, ref: str | int) -> None:
-        await self.uow.tasks.delete(parse_task_ref(ref))
+    async def delete(self, ref: TaskRef) -> None:
+        await self.uow.tasks.delete((await self.get(ref)).id)
 
     # --- comments -----------------------------------------------------------
 
-    async def add_comment(self, ref: str | int, body: str, created_at=None) -> Comment:
+    async def add_comment(self, ref: TaskRef, body: str, created_at=None) -> Comment:
         task = await self.get(ref)
         if not body.strip():
             raise ValidationError("Comment is empty")
-        c = await self.uow.comments.add(
-            Comment(task_id=task.id, body=body, created_at=created_at)  # type: ignore[arg-type]
-        )
-        await self._log(task.id, "commented", {"comment_id": c.id}, at=c.created_at)  # type: ignore[arg-type]
+        c = await self.uow.comments.add(Comment(task_id=task.id, body=body, created_at=created_at))
+        await self._log(task.id, "commented", {"comment_id": str(c.id)}, at=c.created_at)
         return c

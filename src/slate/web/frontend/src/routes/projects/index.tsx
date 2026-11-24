@@ -22,7 +22,7 @@ function ProjectLine({ p, today }: { p: Project; today?: string }) {
   return (
     <Link
       to="/projects/$projectId"
-      params={{ projectId: p.uuid }}
+      params={{ projectId: p.id }}
       className="flex min-h-[44px] items-center gap-3 border-b border-line/70 bg-panel px-4 text-[14px] hover:bg-hover desk:min-h-[38px] desk:px-5 desk:text-[13.5px]"
     >
       <span className="min-w-0 flex-1 truncate">{p.name}</span>
@@ -54,7 +54,7 @@ function Projects() {
               {area ? (
                 <Link
                   to="/areas/$areaId"
-                  params={{ areaId: area.uuid }}
+                  params={{ areaId: area.id }}
                   className="inline-flex items-center gap-2 hover:text-accent"
                 >
                   <Dot color={area.color} />

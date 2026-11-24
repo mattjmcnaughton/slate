@@ -73,12 +73,12 @@ function useGlobalKeys() {
       {
         keys: "enter",
         when: () => free() && ui().selectedId !== null,
-        run: () => ui().openDetail(ui().selectedId as number),
+        run: () => ui().openDetail(ui().selectedId as string),
       },
       {
         keys: "x",
         when: () => free() && ui().selectedId !== null,
-        run: () => ui().toggleChecked(ui().selectedId as number),
+        run: () => ui().toggleChecked(ui().selectedId as string),
       },
       { keys: "e", when: hasTarget, run: () => actionsRef.current.toggleComplete(targetIds()) },
       { keys: "s", when: hasTarget, run: menu("status") },
@@ -219,7 +219,7 @@ function Sidebar() {
   const areas = useAreas().data ?? [];
   const projects = useProjects().data ?? [];
   const agenda = useAgenda().data;
-  const inbox = useTasks({ inbox: true, parent_id: 0 }).data;
+  const inbox = useTasks({ inbox: true, top_level: true }).data;
   const theme = useTheme();
   const todayCount = agenda
     ? agenda.overdue.length + (agenda.days.find((d) => d.date === agenda.today)?.tasks.length ?? 0)
@@ -284,7 +284,7 @@ function Sidebar() {
               {area ? (
                 <Link
                   to="/areas/$areaId"
-                  params={{ areaId: area.uuid }}
+                  params={{ areaId: area.id }}
                   className="flex h-7 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-ink hover:bg-hover"
                   activeProps={{ className: "!bg-accent-soft font-medium" }}
                 >
@@ -298,7 +298,7 @@ function Sidebar() {
                 <Link
                   key={p.id}
                   to="/projects/$projectId"
-                  params={{ projectId: p.uuid }}
+                  params={{ projectId: p.id }}
                   className="flex h-7 items-center gap-2 rounded-md pl-[30px] pr-2.5 text-[13px] text-ink2 hover:bg-hover hover:text-ink"
                   activeProps={{ className: "!bg-accent-soft !text-ink font-medium" }}
                 >
