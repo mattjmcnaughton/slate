@@ -15,6 +15,7 @@ Signing in to the hosted app is limited to an allowlist of email addresses. To t
 - **Projects with a list or a board**, grouped into areas, with target dates, progress, subtasks, and comments.
 - **Recurring tasks** with Todoist-style rules such as `every tue` or `every! 3 days`.
 - **Keyboard everywhere**: `C` to add, `J`/`K` to move, `G T` for Today, `Ctrl+K` for the command palette, `?` for every shortcut. Light and dark themes.
+- **An assistant that drafts, you decide.** Ask the sidebar assistant (`Ctrl+J`) to triage, reschedule, or turn a screenshot into tasks. Its writes land as Pending changes you apply or dismiss. AI clients such as Claude Code connect to the same tools over MCP at `/mcp`.
 - **Bring your data**: a bulk import API (`POST /api/import`) moves areas, projects, labels, tasks, and comments over from Linear and Todoist.
 
 ## Screenshots
@@ -35,6 +36,10 @@ Signing in to the hosted app is limited to an allowlist of email addresses. To t
 
 ![Task detail panel with status, priority, subtasks, and comments](docs/screenshots/task-detail.png)
 
+**The assistant** answers questions about your tasks and drafts changes as Pending changes, which you edit, apply, or dismiss.
+
+![Assistant panel with a reply and two drafted Pending changes: a rescheduled task and a new task](docs/screenshots/assistant.png)
+
 **The command palette** (`Ctrl+K`) reaches every view and command, here in the dark theme.
 
 ![Command palette open in the dark theme](docs/screenshots/command-palette-dark.png)
@@ -51,7 +56,7 @@ uv sync --dev
 just dev
 ```
 
-Open the URL the frontend dev server prints (usually http://localhost:5173). `just dev` uses in-memory storage, signs you in as a local dev user, and loads sample data, so nothing needs configuring. Use `just dev-be-sqlite` instead of `just dev-be` to keep data in `./data.db` between restarts.
+Open the URL the frontend dev server prints (usually http://localhost:5173). `just dev` uses in-memory storage, signs you in as a local dev user, and loads sample data, so nothing needs configuring. Use `just dev-be-sqlite` instead of `just dev-be` to keep data in `./data.db` between restarts. The assistant needs `OPENROUTER_API_KEY` set (see `.env.example`); everything else works without it.
 
 The API runs at http://localhost:8000 (interactive docs at `/docs`), and the frontend dev server proxies `/api` to it. Run them separately with `just dev-be` and `just dev-fe`.
 
@@ -99,7 +104,7 @@ docker run -p 8000:8000 slate
 
 ## Frontend
 
-The frontend lives in `src/slate/web/frontend/`. Scaffold it using the `frontend-react` Copier template. See `src/slate/web/frontend/README.md` for details.
+The React frontend lives in `src/slate/web/frontend/`. Run `just storybook` there to browse every screen, overlay, and component in light and dark themes, including empty and loading states. Storybook runs against an in-browser mock API, so it needs no backend.
 
 ## Architecture
 
