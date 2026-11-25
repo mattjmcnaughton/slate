@@ -61,25 +61,25 @@ class EntityRepository[T](Protocol):
 
 
 class AreaRepository(EntityRepository["Area"], Protocol):
-    async def list(self) -> list[Area]:
+    async def list(self) -> builtins.list[Area]:
         """All areas ordered by position, then id."""
         ...
 
 
 class ProjectRepository(EntityRepository["Project"], Protocol):
-    async def list(self, area_id: UUID | None = None) -> list[Project]:
+    async def list(self, area_id: UUID | None = None) -> builtins.list[Project]:
         """Projects ordered by position, then id."""
         ...
 
 
 class LabelRepository(EntityRepository["Label"], Protocol):
-    async def list(self) -> list[Label]:
+    async def list(self) -> builtins.list[Label]:
         """All labels ordered by name."""
         ...
 
 
 class TaskRepository(EntityRepository["Task"], Protocol):
-    async def list(self, f: TaskFilter) -> list[Task]: ...
+    async def list(self, f: TaskFilter) -> builtins.list[Task]: ...
 
     async def get_by_number(self, number: int) -> Task | None:
         """The task whose key is SLT-<number> in this workspace."""
@@ -103,7 +103,7 @@ class CommentRepository(EntityRepository["Comment"], Protocol):
 
 
 class ActivityRepository(Protocol):
-    async def add(self, activity: Activity) -> Activity: ...
+    async def add(self, entity: Activity, /) -> Activity: ...
     async def list_for_task(self, task_id: UUID) -> list[Activity]:
         """Oldest first."""
         ...
@@ -129,7 +129,7 @@ class PendingChangeRepository(Protocol):
 
 
 class AgentMessageRepository(Protocol):
-    async def add(self, message: AgentMessage) -> AgentMessage: ...
+    async def add(self, message: AgentMessage, /) -> AgentMessage: ...
     async def list_for_user(self, user_id: UUID) -> list[AgentMessage]:
         """Oldest first."""
         ...
@@ -161,18 +161,32 @@ class ApiKeyRepository(Protocol):
 
 
 class UnitOfWork(Protocol):
-    users: UserRepository
-    workspaces: WorkspaceRepository
-    api_keys: ApiKeyRepository
-    areas: AreaRepository
-    projects: ProjectRepository
-    labels: LabelRepository
-    tasks: TaskRepository
-    comments: CommentRepository
-    activity: ActivityRepository
-    settings: SettingsRepository
-    pending_changes: PendingChangeRepository
-    agent_messages: AgentMessageRepository
+    """Repositories are read-only members so implementations may narrow their types."""
+
+    @property
+    def users(self) -> UserRepository: ...
+    @property
+    def workspaces(self) -> WorkspaceRepository: ...
+    @property
+    def api_keys(self) -> ApiKeyRepository: ...
+    @property
+    def areas(self) -> AreaRepository: ...
+    @property
+    def projects(self) -> ProjectRepository: ...
+    @property
+    def labels(self) -> LabelRepository: ...
+    @property
+    def tasks(self) -> TaskRepository: ...
+    @property
+    def comments(self) -> CommentRepository: ...
+    @property
+    def activity(self) -> ActivityRepository: ...
+    @property
+    def settings(self) -> SettingsRepository: ...
+    @property
+    def pending_changes(self) -> PendingChangeRepository: ...
+    @property
+    def agent_messages(self) -> AgentMessageRepository: ...
 
     async def __aenter__(self) -> Self: ...
     async def __aexit__(self, *exc: object) -> None:

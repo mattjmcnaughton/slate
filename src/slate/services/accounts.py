@@ -38,7 +38,7 @@ def is_admitted(identity: Identity, subjects: frozenset[str], emails: frozenset[
     if identity.subject in subjects:
         return True
     # The provider leaves email unset unless it is verified.
-    return bool(identity.email) and identity.email.lower() in emails  # type: ignore[union-attr]
+    return bool(identity.email) and identity.email.lower() in emails
 
 
 @dataclass(frozen=True)

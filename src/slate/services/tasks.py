@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import replace
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any
@@ -127,7 +128,7 @@ class TaskService:
             raise NotFoundError(f"task {ref}")
         return task
 
-    async def list(self, f: TaskFilter) -> list[Task]:
+    async def list(self, f: TaskFilter) -> builtins.list[Task]:
         return await self.uow.tasks.list(f)
 
     # --- writes -------------------------------------------------------------

@@ -127,7 +127,7 @@ class _Repo[T](_Owned):
 class MemoryAreaRepository(_Repo[Area]):
     name = "areas"
 
-    async def list(self) -> list[Area]:
+    async def list(self) -> builtins.list[Area]:
         return sorted(self._all(), key=lambda a: (a.position, a.id))
 
     async def delete(self, id: UUID) -> None:
@@ -140,7 +140,7 @@ class MemoryAreaRepository(_Repo[Area]):
 class MemoryProjectRepository(_Repo[Project]):
     name = "projects"
 
-    async def list(self, area_id: UUID | None = None) -> list[Project]:
+    async def list(self, area_id: UUID | None = None) -> builtins.list[Project]:
         rows = [p for p in self._all() if area_id is None or p.area_id == area_id]
         return sorted(rows, key=lambda p: (p.position, p.id))
 
@@ -154,7 +154,7 @@ class MemoryProjectRepository(_Repo[Project]):
 class MemoryLabelRepository(_Repo[Label]):
     name = "labels"
 
-    async def list(self) -> list[Label]:
+    async def list(self) -> builtins.list[Label]:
         return sorted(self._all(), key=lambda label: (label.name.lower(), label.id))
 
     async def delete(self, id: UUID) -> None:
@@ -185,7 +185,7 @@ class MemoryTaskRepository(_Repo[Task]):
             entity.number = old.number  # numbers never change
         return await super().update(entity)
 
-    async def list(self, f: TaskFilter) -> list[Task]:
+    async def list(self, f: TaskFilter) -> builtins.list[Task]:
         projects = {p.id: p for p in self.mine("projects")}
         rows = [t for t in self._all() if matches(t, f, projects)]
         return sort_tasks(rows, f)

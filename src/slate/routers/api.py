@@ -84,7 +84,7 @@ async def present_tasks(svc: TaskService, tasks: list[Task]) -> list[TaskOut]:
     comments = await svc.uow.comments.count_by_task(ids)
     children = await svc.uow.tasks.list(TaskFilter(include_closed=True, has_due=None))
     subs: dict[UUID, list[Task]] = {}
-    numbers = {c.id: c.number for c in children}
+    numbers = {c.id: c.number or 0 for c in children}
     for c in children:
         if c.parent_id is not None:
             subs.setdefault(c.parent_id, []).append(c)
@@ -94,9 +94,9 @@ async def present_tasks(svc: TaskService, tasks: list[Task]) -> list[TaskOut]:
         out.append(
             TaskOut(
                 **{k: v for k, v in asdict(t).items() if k not in ("recurrence",)},
-                key=task_key(t.number),  # type: ignore[arg-type]
-                parent_key=task_key(numbers[t.parent_id])  # type: ignore[arg-type]
-                if t.parent_id in numbers
+                key=task_key(t.number or 0),
+                parent_key=task_key(numbers[t.parent_id])
+                if t.parent_id is not None and t.parent_id in numbers
                 else None,
                 recurrence=_rec(t.recurrence),
                 comment_count=comments.get(t.id, 0),

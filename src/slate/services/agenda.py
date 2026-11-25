@@ -75,8 +75,9 @@ async def project_progress(uow: UnitOfWork, projects: list[Project]) -> dict[UUI
     tasks = await uow.tasks.list(TaskFilter(include_closed=True, recurring=False))
     out = {p.id: Progress(0, 0) for p in projects}
     for t in tasks:
-        if t.project_id in out and t.status != TaskStatus.CANCELED:
-            out[t.project_id].total += 1
+        p = out.get(t.project_id) if t.project_id is not None else None
+        if p is not None and t.status != TaskStatus.CANCELED:
+            p.total += 1
             if t.status == TaskStatus.DONE:
-                out[t.project_id].done += 1
+                p.done += 1
     return out

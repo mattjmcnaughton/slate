@@ -93,11 +93,13 @@ def _fill_row(name: str, row: Any, e: Any) -> None:
 
 def _task_to_entity(row: TaskRow, label_ids: list[UUID]) -> Task:
     rec = None
-    if row.recurrence_rrule:
+    # _fill_task_row always stores dtstart with an rrule; due_date covers older rows.
+    dtstart = row.recurrence_dtstart or row.due_date
+    if row.recurrence_rrule and dtstart:
         rec = Recurrence(
             rrule=row.recurrence_rrule,
             mode=RecurrenceMode(row.recurrence_mode or "fixed"),
-            dtstart=row.recurrence_dtstart or row.due_date,  # type: ignore[arg-type]
+            dtstart=dtstart,
             time=row.recurrence_time,
             text=row.recurrence_text or "",
         )
@@ -224,7 +226,7 @@ class _SqlRepo(_Owned):
 class SqlAreaRepository(_SqlRepo):
     name = "areas"
 
-    async def list(self) -> list[Area]:
+    async def list(self) -> builtins.list[Area]:
         q = select(AreaRow).where(AreaRow.workspace_id == self.ws)
         rows = (await self.s.execute(q.order_by(AreaRow.position, AreaRow.id))).scalars()
         return [_to_entity(self.name, r) for r in rows]
@@ -246,7 +248,7 @@ class SqlAreaRepository(_SqlRepo):
 class SqlProjectRepository(_SqlRepo):
     name = "projects"
 
-    async def list(self, area_id: UUID | None = None) -> list[Project]:
+    async def list(self, area_id: UUID | None = None) -> builtins.list[Project]:
         q = select(ProjectRow).where(ProjectRow.workspace_id == self.ws)
         if area_id is not None:
             q = q.where(ProjectRow.area_id == area_id)
@@ -267,7 +269,7 @@ class SqlProjectRepository(_SqlRepo):
 class SqlLabelRepository(_SqlRepo):
     name = "labels"
 
-    async def list(self) -> list[Label]:
+    async def list(self) -> builtins.list[Label]:
         q = select(LabelRow).where(LabelRow.workspace_id == self.ws)
         rows = (await self.s.execute(q.order_by(func.lower(LabelRow.name), LabelRow.id))).scalars()
         return [_to_entity(self.name, r) for r in rows]
@@ -306,7 +308,7 @@ class SqlCommentRepository(_SqlRepo):
 
 
 class SqlTaskRepository(_Owned):
-    async def _labels(self, task_ids: list[UUID]) -> dict[UUID, list[UUID]]:
+    async def _labels(self, task_ids: builtins.list[UUID]) -> dict[UUID, builtins.list[UUID]]:
         out: dict[UUID, list[UUID]] = {i: [] for i in task_ids}
         if task_ids:
             q = select(TaskLabelRow.task_id, TaskLabelRow.label_id).where(
@@ -316,7 +318,7 @@ class SqlTaskRepository(_Owned):
                 out[tid].append(lid)
         return out
 
-    async def _set_labels(self, task_id: UUID, label_ids: list[UUID]) -> None:
+    async def _set_labels(self, task_id: UUID, label_ids: builtins.list[UUID]) -> None:
         await self.s.execute(
             delete(TaskLabelRow).where(
                 TaskLabelRow.workspace_id == self.ws, TaskLabelRow.task_id == task_id
@@ -401,7 +403,7 @@ class SqlTaskRepository(_Owned):
         await self.s.flush()
         self.s.expunge_all()
 
-    async def list(self, f: TaskFilter) -> list[Task]:
+    async def list(self, f: TaskFilter) -> builtins.list[Task]:
         q = select(TaskRow).where(TaskRow.workspace_id == self.ws)
         if f.statuses:
             q = q.where(TaskRow.status.in_([str(s) for s in f.statuses]))
