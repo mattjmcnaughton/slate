@@ -304,3 +304,20 @@ async def test_agent_settings_pending_changes_and_messages(raw_factory):
         await uow.agent_messages.clear(owner)
         await uow.commit()
         assert await uow.agent_messages.list_for_user(owner) == []
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_POSTGRES_URL"), reason="needs Postgres")
+async def test_engine_recovers_when_server_drops_idle_connection():
+    """Neon closes idle connections; the next request must not 500 on a dead pooled one."""
+    url = os.environ["TEST_POSTGRES_URL"]
+    engine, killer = make_engine(url), make_engine(url)
+    try:
+        async with engine.connect() as conn:
+            pid = (await conn.exec_driver_sql("SELECT pg_backend_pid()")).scalar()
+        async with killer.connect() as conn:
+            await conn.exec_driver_sql(f"SELECT pg_terminate_backend({pid})")
+        async with engine.connect() as conn:
+            assert (await conn.exec_driver_sql("SELECT 1")).scalar() == 1
+    finally:
+        await engine.dispose()
+        await killer.dispose()

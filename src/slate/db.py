@@ -16,7 +16,8 @@ from slate.models import Base
 
 
 def make_engine(url: str) -> AsyncEngine:
-    engine = create_async_engine(url)
+    # pre_ping: Neon closes idle connections, so check each pooled one before reuse.
+    engine = create_async_engine(url, pool_pre_ping=True)
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine.sync_engine, "connect")
