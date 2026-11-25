@@ -35,7 +35,7 @@ function GhostRow({ ghost, task }: { ghost: Ghost; task: Task | undefined }) {
       className="flex min-h-[40px] w-full items-center gap-2.5 border-b border-dashed border-line px-4 text-left opacity-55 hover:opacity-80 desk:min-h-[34px] desk:px-5"
     >
       <span className="hidden w-[52px] shrink-0 text-[12px] tabular-nums text-ink3 desk:block">
-        {task?.key ?? `SLT-${ghost.task_id}`}
+        {task?.key}
       </span>
       <span className="hidden w-[14px] desk:block" />
       <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-dashed border-ink3" />

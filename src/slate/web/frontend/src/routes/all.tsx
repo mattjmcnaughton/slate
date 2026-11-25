@@ -410,9 +410,7 @@ function Table({ tasks }: { tasks: Task[] }) {
               </td>
               <td className="px-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  {t.parent_id && (
-                    <span className="text-[11.5px] text-ink3">SLT-{t.parent_id} ›</span>
-                  )}
+                  {t.parent_id && <span className="text-[11.5px] text-ink3">{t.parent_key} ›</span>}
                   <span className={`truncate ${closed ? "text-ink3 line-through" : ""}`}>
                     {t.title}
                   </span>

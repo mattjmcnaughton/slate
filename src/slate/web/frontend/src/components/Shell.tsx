@@ -1,9 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { useIsPhone } from "../hooks/useMedia";
 import { useTaskActions } from "../lib/actions";
 import { type Binding, createDispatcher } from "../lib/keys";
 import {
+  findTask,
   useAgenda,
   useAreas,
   useMe,
@@ -415,6 +417,8 @@ function Sidebar() {
 
 function ModeLine() {
   const selected = useUI((s) => s.selectedId);
+  const qc = useQueryClient();
+  const selectedKey = selected === null ? undefined : findTask(qc, selected)?.key;
   const checked = useUI((s) => s.checkedIds.length);
   const detail = useUI((s) => s.detailId);
   const view = useUI((s) => Boolean(s.page.toggleView));
@@ -428,7 +432,7 @@ function ModeLine() {
   return (
     <footer className="flex h-8 shrink-0 items-center gap-4 overflow-hidden border-t border-line bg-bg px-4 text-[11.5px] text-ink3">
       <span className="min-w-[88px] font-medium text-ink2">
-        {checked > 0 ? `${checked} selected` : selected !== null ? `SLT-${selected}` : "Slate"}
+        {checked > 0 ? `${checked} selected` : (selectedKey ?? "Slate")}
       </span>
       {target ? (
         <>

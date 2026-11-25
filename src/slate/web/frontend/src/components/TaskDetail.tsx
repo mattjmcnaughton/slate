@@ -62,7 +62,7 @@ export function TaskDetail({ id, phone }: { id: string; phone: boolean }) {
             <IconBack size={18} />
           </button>
         )}
-        <span className="text-[12.5px] tabular-nums text-ink3">{task?.key ?? `SLT-${id}`}</span>
+        <span className="text-[12.5px] tabular-nums text-ink3">{task?.key}</span>
         {task?.parent_id && (
           <button
             type="button"
