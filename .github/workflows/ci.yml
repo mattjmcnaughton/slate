@@ -6,23 +6,79 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  gate-expensive:
+  backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: slate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/slate_test
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --dev --frozen
+        run: uv sync --frozen
 
-      - name: Install just
-        run: sudo apt-get update && sudo apt-get install -y just
+      - name: Ruff format
+        run: uv run ruff format --check .
 
-      - name: Run gate-expensive
-        run: just gate-expensive
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Tests (unit + integration, incl. Postgres)
+        run: uv run pytest tests/unit tests/integration
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/slate/web/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/slate/web/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome format
+        run: pnpm exec biome format .
+
+      - name: Biome lint
+        run: pnpm exec biome lint .
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Vitest
+        run: pnpm exec vitest run
+
+      - name: Build
+        run: pnpm run build
