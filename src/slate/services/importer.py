@@ -237,7 +237,7 @@ async def run_import(svc: TaskService, batch: ImportBatch) -> ImportReport:
                         task_id=saved.id,
                         body=c.body,
                         source=src,
-                        source_id=c.source_id,  # type: ignore[arg-type]
+                        source_id=c.source_id,
                         created_at=c.created_at,
                     )
                 )

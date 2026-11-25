@@ -270,4 +270,4 @@ async def seed_demo(svc: TaskService) -> None:
             created_at=datetime(2025, 11, 1, 12, tzinfo=UTC),
         )
     )
-    await svc._log(old.id, "created", at=old.created_at)  # type: ignore[arg-type]  # noqa: SLF001
+    await svc._log(old.id, "created", at=old.created_at)  # noqa: SLF001
