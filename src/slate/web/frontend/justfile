@@ -49,3 +49,11 @@ gate-external: gate-expensive test-external
 # Start dev server
 dev:
     pnpm vite
+
+# Browse components and screens against a mock API (no backend needed)
+storybook:
+    pnpm exec storybook dev -p 6006 --no-open
+
+# Build the static Storybook into storybook-static/
+build-storybook:
+    pnpm exec storybook build
